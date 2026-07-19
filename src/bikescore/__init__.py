@@ -16,6 +16,18 @@ __version__ = "0.1.0"
 
 from bikescore.config import BNAConfig
 from bikescore.config_resolver import build_config
+from bikescore.pipeline import PIPELINE, ScoreResult, score_city
 from bikescore.scenarios import list_bundled_scenarios
+from bikescore.stage import StageSpec, run_stage
 
-__all__ = ["BNAConfig", "__version__", "build_config", "list_bundled_scenarios"]
+__all__ = [
+    "PIPELINE",
+    "BNAConfig",
+    "ScoreResult",
+    "StageSpec",
+    "__version__",
+    "build_config",
+    "list_bundled_scenarios",
+    "run_stage",
+    "score_city",
+]
