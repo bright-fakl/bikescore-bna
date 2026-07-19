@@ -1,0 +1,125 @@
+name: segment_stress
+sets:
+  motorway_trunk_fcs:
+  - motorway
+  - trunk
+  - motorway_link
+  - trunk_link
+  primary_fcs:
+  - primary
+  - primary_link
+  secondary_fcs:
+  - secondary
+  - secondary_link
+  tertiary_fcs:
+  - tertiary
+  - tertiary_link
+passes:
+- name: seg_stress
+  for:
+    dir:
+    - ft
+    - tf
+  rules:
+  - id: motorway_trunk
+    when:
+      adj_fc: $motorway_trunk_fcs
+    set:
+      <dir>_seg_stress: 3
+  - id: path_track
+    when:
+      adj_fc:
+      - path
+      - track
+    set:
+      <dir>_seg_stress: 1
+  - id: living_street_bicycle_no
+    when:
+      adj_fc: living_street
+      bicycle: 'no'
+    set:
+      <dir>_seg_stress: 3
+  - id: living_street
+    when:
+      adj_fc: living_street
+    set:
+      <dir>_seg_stress: 1
+  - for:
+      fcg:
+      - primary
+      - secondary
+      - tertiary
+    when:
+      adj_fc: $<fcg>_fcs
+    rules:
+    - id: <fcg>_track
+      when:
+        <dir>_bike_infra: track
+      set:
+        <dir>_seg_stress: 1
+    - when:
+        <dir>_bike_infra: buffered_lane
+      rules:
+      - id: <fcg>_buffered_low
+        when:
+          speed_limit:
+            le: 25
+          <dir>_lanes:
+            le: 1
+        set:
+          <dir>_seg_stress: 1
+      - id: <fcg>_buffered_high
+        set:
+          <dir>_seg_stress: 3
+    - when:
+        <dir>_bike_infra: lane
+      rules:
+      - id: <fcg>_lane_low
+        when:
+          speed_limit:
+            le: 20
+          <dir>_lanes:
+            le: 1
+          <dir>_bike_infra_width:
+            ge: 4
+        set:
+          <dir>_seg_stress: 1
+      - id: <fcg>_lane_high
+        set:
+          <dir>_seg_stress: 3
+    - id: <fcg>_shared_low
+      when:
+        speed_limit:
+          le: 15
+        <dir>_lanes: 1
+      set:
+        <dir>_seg_stress: 1
+    - id: <fcg>_default
+      set:
+        <dir>_seg_stress: 3
+  - id: residential
+    when:
+      adj_fc: residential
+    rules:
+    - id: residential_low
+      when:
+        speed_limit:
+          le: 25
+      set:
+        <dir>_seg_stress: 1
+    - id: residential_high
+      set:
+        <dir>_seg_stress: 3
+  - id: unclassified
+    when:
+      adj_fc: unclassified
+    rules:
+    - id: unclassified_low
+      when:
+        speed_limit:
+          le: 25
+      set:
+        <dir>_seg_stress: 1
+    - id: unclassified_high
+      set:
+        <dir>_seg_stress: 3

@@ -1,0 +1,1053 @@
+# Built-in BNA attributes — standard pipeline computed columns declared as YAML attributes.
+# These migrate hardcoded Python from the Attributes stage into the attribute
+# mechanism so columns are transparent, replaceable, and extensible.
+#
+# Registration order matters: attributes registered earlier have their outputs visible
+# to attributes registered later (cross-attribute dependency).
+
+attributes:
+
+  # ── Primary attributes (raw OSM-tag loads, no decision — Phase 35g) ────────────
+  # These declare a raw tag so Parse loads it as a column, replacing the former
+  # hard-coded BASE_WAY_TAGS entries. footway/tracktype/golf/golf_cart feed the
+  # functional_class ruleset's derived flags (footway_wide, is_golf_path); width
+  # feeds the width_parsed derived attribute below.
+
+  - name: footway
+    osm_tag: footway
+    description: Raw OSM footway tag — input to the functional_class footway_wide flag.
+
+  - name: tracktype
+    osm_tag: tracktype
+    description: Raw OSM tracktype tag — functional_class input.
+
+  - name: golf
+    osm_tag: golf
+    description: Raw OSM golf tag — input to the functional_class is_golf_path flag.
+
+  - name: golf_cart
+    osm_tag: golf_cart
+    description: Raw OSM golf_cart tag — input to the functional_class is_golf_path flag.
+
+  - name: width
+    osm_tag: width
+    description: Raw OSM width tag — input to the width_parsed derived attribute.
+
+  - name: access
+    osm_tag: access
+    description: Raw OSM access tag — input to the functional_class access_ok flag.
+
+  - name: oneway
+    osm_tag: oneway
+    description: Raw OSM oneway tag — input to the one_way_car attribute.
+
+  - name: oneway:bicycle
+    osm_tag: oneway:bicycle
+    description: Raw OSM oneway:bicycle tag — input to the bike_infra attribute.
+
+  # ── Raw-OSM attribute attributes (no functional_class dependency) ──────────────
+
+  - name: one_way_car
+    extra_tags: []
+    description: >
+      Intermediate one-way direction flag from OSM oneway tag.
+      'ft' = forward, 'tf' = backward. Used by bike_infra and lanes attributes.
+      Reads the oneway primary attribute's column (Phase 35g).
+    compute:
+      rules:
+        - id: ft
+          when:
+            oneway: {in: ["1", "yes"]}
+          set:
+            one_way_car: ft
+        - id: tf
+          when:
+            oneway: "-1"
+          set:
+            one_way_car: tf
+      default: {one_way_car: null}
+
+  - name: speed_parsed
+    extra_tags: [maxspeed]
+    description: >
+      speed_limit (mph). Observed from the OSM maxspeed tag; the fallback passes fill
+      remaining nulls from the city/state residential defaults then a per-functional-class
+      default (Phase 35f — was the impute stage's speed_imputation ruleset). Rows filled
+      by a fallback pass are flagged speed_limit_imputed=True.
+    compute:
+      rules:
+        - id: from_maxspeed
+          when:
+            maxspeed: present
+          set:
+            speed_limit: {$apply: parse_speed_mph, to: maxspeed, bare_unit: {$var: speed_bare_unit}}
+      default: {}
+    fallback:
+      # Phase 36g — value-grouped (was 16 per-functional-class rules). The shared
+      # speed_limit:is_null guard is hoisted to the scope; equal-valued defaults
+      # become named-set memberships. The residential cascade rule stays first so a
+      # null city/state default still falls through to the 25 mph residential default.
+      sets:
+        speed_40_fcs: [primary, primary_link, secondary, secondary_link, trunk, trunk_link]
+        speed_55_fcs: [motorway, motorway_link]
+        speed_30_fcs: [tertiary, tertiary_link]
+        speed_25_fcs: [residential, unclassified]
+        speed_15_fcs: [living_street, track, path]
+      rules:
+        - when: {speed_limit: is_null}
+          rules:
+            - id: speed_residential_default
+              when: {functional_class: residential}
+              set: {speed_limit: {$cascade: [{$var: city_default_speed}, {$var: state_default_speed}]}}
+            - id: speed_40
+              when: {functional_class: $speed_40_fcs}
+              set: {speed_limit: 40.0}
+            - id: speed_55
+              when: {functional_class: $speed_55_fcs}
+              set: {speed_limit: 55.0}
+            - id: speed_30
+              when: {functional_class: $speed_30_fcs}
+              set: {speed_limit: 30.0}
+            - id: speed_25
+              when: {functional_class: $speed_25_fcs}
+              set: {speed_limit: 25.0}
+            - id: speed_15
+              when: {functional_class: $speed_15_fcs}
+              set: {speed_limit: 15.0}
+      default: {}
+
+  - name: lanes_ft
+    extra_tags: [turn:lanes:forward, turn:lanes, lanes:forward, lanes, lanes:backward,
+                 turn:lanes:backward]
+    description: >
+      Raw OSM lanes → ft_lanes (forward direction). Priority:
+      turn:lanes:forward > turn:lanes (oneway ft) > lanes:forward > lanes (oneway ft)
+      > lanes (two-way, ceil÷2). Fallback passes fill remaining nulls from
+      per-functional-class defaults, skipping the opposite one-way direction
+      (Phase 35f — was the impute lane_imputation ruleset); fallback-filled rows
+      are flagged {ft,tf}_lanes_imputed=True.
+    compute:
+      rules:
+        - id: from_tl_fwd
+          when:
+            "turn:lanes:forward": present
+          set:
+            ft_lanes: {$apply: count_pipes, to: "turn:lanes:forward"}
+        - id: from_tl_all_ft
+          when:
+            "turn:lanes": present
+            oneway: {in: ["1", "yes"]}
+          set:
+            ft_lanes: {$apply: count_pipes, to: "turn:lanes"}
+        - id: from_l_fwd
+          when:
+            "lanes:forward": present
+          set:
+            ft_lanes: {$apply: parse_int, to: "lanes:forward"}
+        - id: from_l_all_ft
+          when:
+            lanes: present
+            oneway: {in: ["1", "yes"]}
+          set:
+            ft_lanes: {$apply: parse_int, to: lanes}
+        - id: from_l_all_two_way_null
+          when:
+            lanes: present
+            oneway: absent
+          set:
+            ft_lanes: {$apply: parse_int_half, to: lanes}
+        - id: from_l_all_two_way_no
+          when:
+            lanes: present
+            oneway: "no"
+          set:
+            ft_lanes: {$apply: parse_int_half, to: lanes}
+      default: {}
+    fallback:
+      # Phase 36g — value-grouped (was 15 per-functional-class rules). The shared
+      # null + opposite-one-way guard is hoisted to the scope; the two distinct
+      # default lane counts become named-set memberships.
+      sets:
+        lanes_multi_fcs: [primary, primary_link, secondary, secondary_link, trunk, trunk_link, motorway, motorway_link]
+        lanes_single_fcs: [tertiary, tertiary_link, residential, living_street, unclassified, track, path]
+      rules:
+        - when: {ft_lanes: is_null, one_way_car: {not_in: [tf]}}
+          rules:
+            - id: lanes_ft_multi
+              when: {functional_class: $lanes_multi_fcs}
+              set: {ft_lanes: 2.0}
+            - id: lanes_ft_single
+              when: {functional_class: $lanes_single_fcs}
+              set: {ft_lanes: 1.0}
+      default: {}
+
+  - name: lanes_tf
+    extra_tags: [turn:lanes:backward, turn:lanes, lanes:backward, lanes, lanes:forward,
+                 turn:lanes:forward]
+    description: >
+      Raw OSM lanes → tf_lanes (backward direction). Priority:
+      turn:lanes:backward > turn:lanes (oneway tf) > lanes:backward > lanes (oneway tf)
+      > lanes (two-way, ceil÷2). Fallback passes fill remaining nulls from
+      per-functional-class defaults, skipping the opposite one-way direction
+      (Phase 35f — was the impute lane_imputation ruleset); fallback-filled rows
+      are flagged {ft,tf}_lanes_imputed=True.
+    compute:
+      rules:
+        - id: from_tl_bwd
+          when:
+            "turn:lanes:backward": present
+          set:
+            tf_lanes: {$apply: count_pipes, to: "turn:lanes:backward"}
+        - id: from_tl_all_tf
+          when:
+            "turn:lanes": present
+            oneway: "-1"
+          set:
+            tf_lanes: {$apply: count_pipes, to: "turn:lanes"}
+        - id: from_l_bwd
+          when:
+            "lanes:backward": present
+          set:
+            tf_lanes: {$apply: parse_int, to: "lanes:backward"}
+        - id: from_l_all_tf
+          when:
+            lanes: present
+            oneway: "-1"
+          set:
+            tf_lanes: {$apply: parse_int, to: lanes}
+        - id: from_l_all_two_way_null
+          when:
+            lanes: present
+            oneway: absent
+          set:
+            tf_lanes: {$apply: parse_int_half, to: lanes}
+        - id: from_l_all_two_way_no
+          when:
+            lanes: present
+            oneway: "no"
+          set:
+            tf_lanes: {$apply: parse_int_half, to: lanes}
+      default: {}
+    fallback:
+      # Phase 36g — value-grouped (was 15 per-functional-class rules). The shared
+      # null + opposite-one-way guard is hoisted to the scope; the two distinct
+      # default lane counts become named-set memberships.
+      sets:
+        lanes_multi_fcs: [primary, primary_link, secondary, secondary_link, trunk, trunk_link, motorway, motorway_link]
+        lanes_single_fcs: [tertiary, tertiary_link, residential, living_street, unclassified, track, path]
+      rules:
+        - when: {tf_lanes: is_null, one_way_car: {not_in: [ft]}}
+          rules:
+            - id: lanes_tf_multi
+              when: {functional_class: $lanes_multi_fcs}
+              set: {tf_lanes: 2.0}
+            - id: lanes_tf_single
+              when: {functional_class: $lanes_single_fcs}
+              set: {tf_lanes: 1.0}
+      default: {}
+
+  - name: width_parsed
+    after: [width]
+    extra_tags: []
+    description: >
+      width_ft (road width, integer feet) parsed from the OSM width tag with PostgreSQL
+      INT-truncation semantics (Phase 35f — was the impute stage's width parse). No
+      fallback: there are no functional-class width defaults, so no width_ft_imputed
+      companion column is produced (unused-flag avoidance).
+    compute:
+      rules:
+        - id: from_width
+          when:
+            width: present
+          set:
+            width_ft: {$apply: parse_width_int, to: width}
+      default: {}
+
+  # ── Bike-infra / parking attribute attributes ─────────────────────────────────
+
+  - name: bike_infra
+    after:
+    - one_way_car
+    extra_tags:
+    - cycleway
+    - cycleway:left
+    - cycleway:right
+    - cycleway:both
+    - cycleway:buffer
+    - cycleway:left:buffer
+    - cycleway:right:buffer
+    - cycleway:both:buffer
+    - cycleway:left:oneway
+    - cycleway:right:oneway
+    description: 'ft/tf_bike_infra (track/lane/sharrow/buffered_lane), one_way (bike
+      direction). Mirrors features/bike_infra.sql. one_way_car must be present (after:
+      [one_way_car]).
+
+      '
+    compute:
+      sets:
+        buf_sides:
+        - 'yes'
+        - both
+        - right
+        - left
+        off_fwd:
+        - 'yes'
+        - 'no'
+        off_back:
+        - '-1'
+        - 'no'
+      passes:
+      - name: infra
+        rules:
+        - id: both_sharrow
+          when:
+            cycleway:both: shared_lane
+          set:
+            ft_bike_infra: sharrow
+            tf_bike_infra: sharrow
+        - id: both_buffered_lane
+          when:
+            cycleway:both: buffered_lane
+          set:
+            ft_bike_infra: buffered_lane
+            tf_bike_infra: buffered_lane
+        - id: both_lane_buf
+          when:
+            cycleway:both: lane
+            cycleway:buffer: $buf_sides
+          set:
+            ft_bike_infra: buffered_lane
+            tf_bike_infra: buffered_lane
+        - id: both_lane_both_buf
+          when:
+            cycleway:both: lane
+            cycleway:both:buffer: $buf_sides
+          set:
+            ft_bike_infra: buffered_lane
+            tf_bike_infra: buffered_lane
+        - id: both_lane
+          when:
+            cycleway:both: lane
+          set:
+            ft_bike_infra: lane
+            tf_bike_infra: lane
+        - id: both_track
+          when:
+            cycleway:both: track
+          set:
+            ft_bike_infra: track
+            tf_bike_infra: track
+        - id: cw_r_track_ob_no
+          when:
+            cycleway:right: track
+            oneway:bicycle: 'no'
+          set:
+            ft_bike_infra: track
+            tf_bike_infra: track
+        - id: cw_r_track_ow_no
+          when:
+            cycleway:right: track
+            cycleway:right:oneway: 'no'
+          set:
+            ft_bike_infra: track
+            tf_bike_infra: track
+        - id: cw_l_track_ob_no
+          when:
+            cycleway:left: track
+            oneway:bicycle: 'no'
+          set:
+            ft_bike_infra: track
+            tf_bike_infra: track
+        - id: cw_l_track_ow_no
+          when:
+            cycleway:left: track
+            cycleway:left:oneway: 'no'
+          set:
+            ft_bike_infra: track
+            tf_bike_infra: track
+        - id: cw_track_ob_no
+          when:
+            cycleway: track
+            oneway:bicycle: 'no'
+          set:
+            ft_bike_infra: track
+            tf_bike_infra: track
+        - for:
+          - {dir: ft, prim: left, sec: right, cgate: tf, two_prim: right, two_off: left, prim_excl: '-1', off_set: off_fwd}
+          - {dir: tf, prim: right, sec: left, cgate: ft, two_prim: left, two_off: right, prim_excl: 'yes', off_set: off_back}
+          rules:
+          - id: <dir>_owc_oneway
+            when:
+              one_way_car: <dir>
+            rules:
+            - id: <dir>_cw_p_sharrow
+              when:
+                cycleway:<prim>: shared_lane
+              set:
+                <dir>_bike_infra: sharrow
+            - id: <dir>_cw_p_buf_with_buf
+              when:
+                cycleway:<prim>: lane
+                cycleway:<prim>:oneway:
+                  ne: '-1'
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_p_buf_with_p_buf
+              when:
+                cycleway:<prim>: lane
+                cycleway:<prim>:oneway:
+                  ne: '-1'
+                cycleway:<prim>:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_p_lane
+              when:
+                cycleway:<prim>: lane
+                cycleway:<prim>:oneway:
+                  ne: '-1'
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_cw_p_track
+              when:
+                cycleway:<prim>: track
+                cycleway:<prim>:oneway:
+                  ne: '-1'
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_cw_sharrow
+              when:
+                cycleway: shared_lane
+              set:
+                <dir>_bike_infra: sharrow
+            - id: <dir>_cw_s_sharrow
+              when:
+                cycleway:<sec>: shared_lane
+              set:
+                <dir>_bike_infra: sharrow
+            - id: <dir>_cw_buffered_lane
+              when:
+                cycleway: buffered_lane
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_s_buffered_lane
+              when:
+                cycleway:<sec>: buffered_lane
+                cycleway:<sec>:oneway:
+                  ne: '-1'
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_lane_buf
+              when:
+                cycleway: lane
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_s_lane_buf
+              when:
+                cycleway:<sec>: lane
+                cycleway:<sec>:oneway:
+                  ne: '-1'
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_s_lane_s_buf
+              when:
+                cycleway:<sec>: lane
+                cycleway:<sec>:oneway:
+                  ne: '-1'
+                cycleway:<sec>:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_cw_lane
+              when:
+                cycleway: lane
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_cw_s_lane
+              when:
+                cycleway:<sec>: lane
+                cycleway:<sec>:oneway:
+                  ne: '-1'
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_cw_track
+              when:
+                cycleway: track
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_cw_s_track
+              when:
+                cycleway:<sec>: track
+                cycleway:<sec>:oneway:
+                  ne: '-1'
+              set:
+                <dir>_bike_infra: track
+          - id: <dir>_owc_contra
+            when:
+              one_way_car: <cgate>
+            rules:
+            - id: <dir>_opp_cw_lane_buf
+              when:
+                cycleway: opposite_lane
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_opp_cw_r_lane_buf
+              when:
+                cycleway:right: opposite_lane
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_opp_cw_r_lane_r_buf
+              when:
+                cycleway:right: opposite_lane
+                cycleway:right:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_opp_cw_l_ow_m1_track
+              when:
+                cycleway:left:oneway: '-1'
+                cycleway:left: track
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_opp_cw_r_ow_m1_track
+              when:
+                cycleway:right:oneway: '-1'
+                cycleway:right: track
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_opp_cw_l_ow_m1_lane_buf
+              when:
+                cycleway:left:oneway: '-1'
+                cycleway:left: lane
+                cycleway:left:buffer: 'yes'
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_opp_cw_r_ow_m1_lane_buf
+              when:
+                cycleway:right:oneway: '-1'
+                cycleway:right: lane
+                cycleway:right:buffer: 'yes'
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_opp_cw_l_ow_m1_lane
+              when:
+                cycleway:left:oneway: '-1'
+                cycleway:left: lane
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_opp_cw_r_ow_m1_lane
+              when:
+                cycleway:right:oneway: '-1'
+                cycleway:right: lane
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_opp_cw_lane
+              when:
+                cycleway: opposite_lane
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_opp_cw_r_lane
+              when:
+                cycleway:right: opposite_lane
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_opp_cw_track
+              when:
+                cycleway: opposite_track
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_opp_cw_l_track
+              when:
+                cycleway:left: opposite_track
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_opp_cw_r_track
+              when:
+                cycleway:right: opposite_track
+              set:
+                <dir>_bike_infra: track
+          - id: <dir>_owc_absent
+            when:
+              one_way_car: absent
+            rules:
+            - id: <dir>_two_cw_sharrow
+              when:
+                cycleway: shared_lane
+              set:
+                <dir>_bike_infra: sharrow
+            - id: <dir>_two_cw_p_sharrow
+              when:
+                cycleway:<two_prim>: shared_lane
+              set:
+                <dir>_bike_infra: sharrow
+            - id: <dir>_two_cw_o_sharrow
+              when:
+                cycleway:<two_off>: shared_lane
+                cycleway:<two_off>:oneway: $<off_set>
+              set:
+                <dir>_bike_infra: sharrow
+            - id: <dir>_two_cw_buffered_lane
+              when:
+                cycleway: buffered_lane
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_p_buffered_lane
+              when:
+                cycleway:<two_prim>: buffered_lane
+                cycleway:<two_prim>:oneway:
+                  ne: '<prim_excl>'
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_o_buffered_lane
+              when:
+                cycleway:<two_off>: buffered_lane
+                cycleway:<two_off>:oneway: $<off_set>
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_lane_buf
+              when:
+                cycleway: lane
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_p_lane_buf
+              when:
+                cycleway:<two_prim>: lane
+                cycleway:<two_prim>:oneway:
+                  ne: '<prim_excl>'
+                cycleway:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_p_lane_p_buf
+              when:
+                cycleway:<two_prim>: lane
+                cycleway:<two_prim>:oneway:
+                  ne: '<prim_excl>'
+                cycleway:<two_prim>:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_o_lane_o_buf
+              when:
+                cycleway:<two_off>: lane
+                cycleway:<two_off>:oneway: $<off_set>
+                cycleway:<two_off>:buffer: $buf_sides
+              set:
+                <dir>_bike_infra: buffered_lane
+            - id: <dir>_two_cw_lane
+              when:
+                cycleway: lane
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_two_cw_p_lane
+              when:
+                cycleway:<two_prim>: lane
+                cycleway:<two_prim>:oneway:
+                  ne: '<prim_excl>'
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_two_cw_o_lane
+              when:
+                cycleway:<two_off>: lane
+                cycleway:<two_off>:oneway: $<off_set>
+              set:
+                <dir>_bike_infra: lane
+            - id: <dir>_two_cw_track
+              when:
+                cycleway: track
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_two_cw_p_track
+              when:
+                cycleway:<two_prim>: track
+                cycleway:<two_prim>:oneway:
+                  ne: '<prim_excl>'
+              set:
+                <dir>_bike_infra: track
+            - id: <dir>_two_cw_o_track
+              when:
+                cycleway:<two_off>: track
+                cycleway:<two_off>:oneway: $<off_set>
+              set:
+                <dir>_bike_infra: track
+        default: {}
+      - name: one_way
+        rules:
+        - id: one_way_ft
+          when:
+            one_way_car: ft
+            tf_bike_infra: absent
+            oneway:bicycle:
+              ne: 'no'
+          set:
+            one_way: ft
+        - id: one_way_tf
+          when:
+            one_way_car: tf
+            ft_bike_infra: absent
+            oneway:bicycle:
+              ne: 'no'
+          set:
+            one_way: tf
+        default:
+          one_way: null
+
+  - name: bike_infra_width
+    after: [bike_infra]
+    extra_tags:
+      - "cycleway:right:width"
+      - "cycleway:left:width"
+      - "cycleway:both:width"
+      - "cycleway:width"
+    description: >
+      ft/tf_bike_infra_width from cycleway width tags using parse_width_ft transform.
+      Priority: right (ft) / left (tf) > side-of-one-way-opposite > both > generic.
+      Only set where the corresponding bike_infra column is non-null.
+    compute:
+      rules:
+        # ft_bike_infra_width: right primary, left secondary for ft one-ways
+        - id: ft_w_from_right
+          when:
+            ft_bike_infra: present
+            "cycleway:right:width": present
+          set:
+            ft_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:right:width"}
+        - id: ft_w_from_left_ft
+          when:
+            ft_bike_infra: present
+            one_way_car: ft
+            "cycleway:left:width": present
+          set:
+            ft_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:left:width"}
+        - id: ft_w_from_both
+          when:
+            ft_bike_infra: present
+            "cycleway:both:width": present
+          set:
+            ft_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:both:width"}
+        - id: ft_w_from_generic
+          when:
+            ft_bike_infra: present
+            "cycleway:width": present
+          set:
+            ft_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:width"}
+        # tf_bike_infra_width: left primary, right secondary for tf one-ways
+        - id: tf_w_from_left
+          when:
+            tf_bike_infra: present
+            "cycleway:left:width": present
+          set:
+            tf_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:left:width"}
+        - id: tf_w_from_right_tf
+          when:
+            tf_bike_infra: present
+            one_way_car: tf
+            "cycleway:right:width": present
+          set:
+            tf_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:right:width"}
+        - id: tf_w_from_both
+          when:
+            tf_bike_infra: present
+            "cycleway:both:width": present
+          set:
+            tf_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:both:width"}
+        - id: tf_w_from_generic
+          when:
+            tf_bike_infra: present
+            "cycleway:width": present
+          set:
+            tf_bike_infra_width: {$apply: parse_width_ft, to: "cycleway:width"}
+      default: {}
+
+  - name: parking
+    extra_tags:
+      - "parking:lane:both"
+      - "parking:lane:right"
+      - "parking:lane:left"
+      - "parking:both"
+      - "parking:right"
+      - "parking:left"
+      - "parking:both:restriction"
+      - "parking:right:restriction"
+      - "parking:left:restriction"
+    description: >
+      ft/tf_park (1=parking present, 0=no parking) from OSM parking tags.
+      Direction-specific tags (right/left) override the both-side result.
+      Priority: direction-specific > both-side. Mirrors features/park.sql.
+    compute:
+      rules:
+        # ── ft_park: right-specific tags take priority ──────────────────────
+        - id: ft_park_lane_right_present
+          when:
+            "parking:lane:right": {in: [parallel, paralell, diagonal, perpendicular]}
+          set:
+            ft_park: 1
+        - id: ft_park_lane_right_none
+          when:
+            "parking:lane:right": {in: [no_parking, no_stopping]}
+          set:
+            ft_park: 0
+        - id: ft_park_right_lane
+          when:
+            "parking:right": lane
+          set:
+            ft_park: 1
+        - id: ft_park_right_no
+          when:
+            "parking:right": "no"
+          set:
+            ft_park: 0
+        - id: ft_park_right_restriction
+          when:
+            "parking:right:restriction": {in: [no_stopping, no_parking]}
+          set:
+            ft_park: 0
+        # both-side tags as fallback for ft
+        - id: ft_park_lane_both_present
+          when:
+            "parking:lane:both": {in: [parallel, paralell, diagonal, perpendicular]}
+          set:
+            ft_park: 1
+        - id: ft_park_lane_both_none
+          when:
+            "parking:lane:both": {in: [no_parking, no_stopping]}
+          set:
+            ft_park: 0
+        - id: ft_park_both_lane
+          when:
+            "parking:both": lane
+          set:
+            ft_park: 1
+        - id: ft_park_both_no
+          when:
+            "parking:both": "no"
+          set:
+            ft_park: 0
+        - id: ft_park_both_restriction
+          when:
+            "parking:both:restriction": {in: [no_stopping, no_parking]}
+          set:
+            ft_park: 0
+        # ── tf_park: left-specific tags take priority ───────────────────────
+        - id: tf_park_lane_left_present
+          when:
+            "parking:lane:left": {in: [parallel, paralell, diagonal, perpendicular]}
+          set:
+            tf_park: 1
+        - id: tf_park_lane_left_none
+          when:
+            "parking:lane:left": {in: [no_parking, no_stopping]}
+          set:
+            tf_park: 0
+        - id: tf_park_left_lane
+          when:
+            "parking:left": lane
+          set:
+            tf_park: 1
+        - id: tf_park_left_no
+          when:
+            "parking:left": "no"
+          set:
+            tf_park: 0
+        - id: tf_park_left_restriction
+          when:
+            "parking:left:restriction": {in: [no_stopping, no_parking]}
+          set:
+            tf_park: 0
+        # both-side tags as fallback for tf
+        - id: tf_park_lane_both_present
+          when:
+            "parking:lane:both": {in: [parallel, paralell, diagonal, perpendicular]}
+          set:
+            tf_park: 1
+        - id: tf_park_lane_both_none
+          when:
+            "parking:lane:both": {in: [no_parking, no_stopping]}
+          set:
+            tf_park: 0
+        - id: tf_park_both_lane
+          when:
+            "parking:both": lane
+          set:
+            tf_park: 1
+        - id: tf_park_both_no
+          when:
+            "parking:both": "no"
+          set:
+            tf_park: 0
+        - id: tf_park_both_restriction
+          when:
+            "parking:both:restriction": {in: [no_stopping, no_parking]}
+          set:
+            tf_park: 0
+      default: {}
+
+  # ── Derived flags for functional_class (Phase 35n) ────────────────────────────
+  # These replace the access_filter / tag_flags / class_adjust_context Python
+  # providers with data. persist: false — each is computed so functional_class can
+  # consume it, then dropped before the stage writes its parquet (intra-stage only).
+
+  - name: access_ok
+    after: [access]
+    persist: false
+    description: >
+      access IS NULL, or (access=no AND bicycle permitted), or access NOT IN
+      (no, private). Was the access_filter provider.
+    compute:
+      sets:
+        bike_yes: ['yes', permissive, designated]
+      rules:
+        - id: access_null
+          when: {access: is_null}
+          set: {access_ok: true}
+        - id: access_no_bike
+          when: {access: "no", bicycle: $bike_yes}
+          set: {access_ok: true}
+        - id: access_permitted
+          when: {access: {not_in: ["no", private]}}
+          set: {access_ok: true}
+      default: {access_ok: false}
+
+  - name: footway_wide
+    after: [width_parsed]
+    persist: false
+    description: bicycle=designated OR width_ft >= 8. Was the tag_flags provider.
+    compute:
+      rules:
+        - id: bike_designated
+          when: {bicycle: designated}
+          set: {footway_wide: true}
+        - id: wide
+          when: {width_ft: {ge: 8}}
+          set: {footway_wide: true}
+      default: {footway_wide: false}
+
+  - name: is_golf_path
+    after: [golf, golf_cart]
+    persist: false
+    description: golf IN (path, cartpath) OR golf_cart IN (yes, designated). Was tag_flags.
+    compute:
+      rules:
+        - id: golf_path
+          when: {golf: {in: [path, cartpath]}}
+          set: {is_golf_path: true}
+        - id: golf_cart_yes
+          when: {golf_cart: {in: ['yes', designated]}}
+          set: {is_golf_path: true}
+      default: {is_golf_path: false}
+
+  - name: cls_both_lane
+    after: [bike_infra]
+    persist: false
+    description: >
+      ft_bike_infra AND tf_bike_infra both in (track, buffered_lane, lane). Drives
+      residential/unclassified -> tertiary promotion. Was class_adjust_context.
+    compute:
+      sets:
+        infra: [track, buffered_lane, lane]
+      rules:
+        - id: both_lane
+          when: {ft_bike_infra: $infra, tf_bike_infra: $infra}
+          set: {cls_both_lane: true}
+      default: {cls_both_lane: false}
+
+  - name: cls_ft_multi
+    after: [lanes_ft]
+    persist: false
+    description: ft_lanes > 1 (observed, pre-imputation). Was class_adjust_context.
+    compute:
+      rules:
+        - id: ft_multi
+          when: {ft_lanes: {gt: 1}}
+          set: {cls_ft_multi: true}
+      default: {cls_ft_multi: false}
+
+  - name: cls_tf_multi
+    after: [lanes_tf]
+    persist: false
+    description: tf_lanes > 1 (observed, pre-imputation). Was class_adjust_context.
+    compute:
+      rules:
+        - id: tf_multi
+          when: {tf_lanes: {gt: 1}}
+          set: {cls_tf_multi: true}
+      default: {cls_tf_multi: false}
+
+  - name: cls_speed_high
+    after: [speed_parsed]
+    persist: false
+    description: speed_limit >= 30 (observed, pre-imputation). Was class_adjust_context.
+    compute:
+      rules:
+        - id: speed_high
+          when: {speed_limit: {ge: 30}}
+          set: {cls_speed_high: true}
+      default: {cls_speed_high: false}
+
+  # ── functional_class (Phase 35n — migrated from the functional_class ruleset) ──
+
+  - name: functional_class
+    after: [access_ok, footway_wide, is_golf_path, cls_both_lane, cls_ft_multi, cls_tf_multi, cls_speed_high]
+    description: >
+      Road functional class from the OSM highway tag (pass 1), then
+      residential/unclassified -> tertiary promotion (pass 2). Reads the access_ok /
+      footway_wide / is_golf_path / cls_* flag columns. Migrated from the
+      functional_class ruleset (Phase 35n).
+    compute:
+      sets:
+        bike_access: ['yes', permissive, designated]
+      passes:
+        - name: functional_class
+          rules:
+            - id: fc_pedestrian
+              when: {highway: pedestrian, bicycle: $bike_access, access_ok: true}
+              set: {functional_class: living_street}
+            - id: fc_path_golf
+              when: {highway: path, is_golf_path: true, access_ok: true}
+              set: {functional_class: unclassified}
+            - id: fc_service
+              when: {highway: service, bicycle: $bike_access, access_ok: true}
+              set: {functional_class: unclassified}
+            - id: fc_footway_wide
+              when: {highway: footway, bicycle: $bike_access, access_ok: true, footway_wide: true}
+              set: {functional_class: path}
+            - id: fc_footway_crossing
+              when: {highway: footway, footway: [crossing, traffic_island], access_ok: true}
+              set: {functional_class: path, xwalk: 1}
+            - id: fc_path_cycleway
+              when: {highway: [cycleway, path], access_ok: true}
+              set: {functional_class: path}
+            - id: fc_track_grade1
+              when: {highway: track, tracktype: grade1, access_ok: true}
+              set: {functional_class: track}
+          map:
+            field: highway
+            to: functional_class
+            when: {access_ok: true}
+            table:
+              motorway: motorway
+              trunk: trunk
+              primary: primary
+              secondary: secondary
+              tertiary: tertiary
+              motorway_link: motorway_link
+              trunk_link: trunk_link
+              primary_link: primary_link
+              secondary_link: secondary_link
+              tertiary_link: tertiary_link
+              unclassified: unclassified
+              residential: residential
+              living_street: living_street
+            default: null
+        - name: class_promotion
+          after: functional_class
+          # Phase 36g — name-token sweep over the four promotion flags (was four
+          # byte-identical promote_* rules differing only in the flag column).
+          for:
+            flag: [cls_both_lane, cls_ft_multi, cls_tf_multi, cls_speed_high]
+          rules:
+            - id: promote_<flag>
+              when: {functional_class: [residential, unclassified], <flag>: true}
+              set: {functional_class: tertiary}

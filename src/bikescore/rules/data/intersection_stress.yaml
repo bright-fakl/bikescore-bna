@@ -1,0 +1,53 @@
+name: intersection_stress
+sets:
+  lesser_fcs:
+  - residential
+  - unclassified
+  - living_street
+  - track
+  - path
+  link_fcs:
+  - motorway_link
+  - trunk_link
+  - primary_link
+  - secondary_link
+  - tertiary_link
+predicates:
+  unprotected_ft:
+    node_signalized_ft: false
+    node_stop_ft: false
+  unprotected_tf:
+    node_signalized_tf: false
+    node_stop_tf: false
+passes:
+- name: int_stress
+  for:
+    dir:
+    - ft
+    - tf
+  rules:
+  - id: lesser_high_crossing
+    when:
+      adj_fc: $lesser_fcs
+      use: unprotected_<dir>
+      has_high_cross_<dir>: true
+    set:
+      <dir>_int_stress: 3
+  - id: tertiary_high_crossing
+    when:
+      adj_fc: tertiary
+      use: unprotected_<dir>
+      has_high_cross_no_tert_<dir>: true
+    set:
+      <dir>_int_stress: 3
+  default:
+    <dir>_int_stress: 1
+- name: int_stress_link_reset
+  after: int_stress
+  rules:
+  - id: link_reset
+    when:
+      adj_fc: $link_fcs
+    set:
+      ft_int_stress: 1
+      tf_int_stress: 1

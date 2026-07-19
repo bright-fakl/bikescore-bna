@@ -1,0 +1,249 @@
+name: standard-bna
+description: "Standard BNA destination types (13 types, PeopleForBikes methodology)"
+
+destinations:
+
+  # ── Opportunity ─────────────────────────────────────────────────────────────
+
+  - name: schools
+    display_name: "K-12 Schools"
+    score_id: opportunity_k12_education
+    category: opportunity
+    weight: 0.35
+    clustering: individual
+    scoring: [0.3, 0.2, 0.2]
+    match:
+      nodes:
+        - {amenity: [school, kindergarten]}
+      areas:
+        - {amenity: [school, kindergarten]}
+    human_explanation: "K12 schools"
+    score_noun: "schools"
+    score_noun_singular: "school"
+
+  - name: colleges
+    display_name: "Technical/Vocational Colleges"
+    score_id: opportunity_technical_vocational_college
+    category: opportunity
+    weight: 0.10
+    clustering: poly
+    clustering_tolerance_m: 100
+    scoring: [0.7]
+    match:
+      nodes:
+        - {amenity: college}
+      areas:
+        - {amenity: college}
+    human_explanation: "tech/vocational colleges"
+    score_noun: "tech/vocational colleges"
+    score_noun_singular: "tech/vocational college"
+
+  - name: universities
+    display_name: "Universities"
+    score_id: opportunity_higher_education
+    category: opportunity
+    weight: 0.20
+    clustering: poly
+    clustering_tolerance_m: 150
+    scoring: [0.7]
+    match:
+      nodes:
+        - {amenity: university}
+      areas:
+        - {amenity: university}
+    human_explanation: "universities"
+    score_noun: "universities"
+    score_noun_singular: "university"
+
+  # ── Core services ────────────────────────────────────────────────────────────
+
+  - name: doctors
+    display_name: "Doctors / Clinics"
+    score_id: core_services_doctors
+    category: core_services
+    weight: 0.20
+    clustering: poly
+    scoring: [0.4, 0.2, 0.1]
+    match:
+      nodes:
+        - {amenity: [clinic, doctors]}
+        - {healthcare: [doctor, doctors, clinic]}
+      areas:
+        - {amenity: [clinic, doctors]}
+        - {healthcare: [doctor, doctors, clinic]}
+    human_explanation: "doctors"
+    score_noun: "doctors"
+
+  - name: dentists
+    display_name: "Dentists"
+    score_id: core_services_dentists
+    category: core_services
+    weight: 0.10
+    clustering: poly
+    scoring: [0.4, 0.2, 0.1]
+    match:
+      nodes:
+        - {amenity: dentist}
+        - {healthcare: dentist}
+      areas:
+        - {amenity: dentist}
+        - {healthcare: dentist}
+    human_explanation: "dentists"
+    score_noun: "dentists"
+
+  - name: hospitals
+    display_name: "Hospitals"
+    score_id: core_services_hospitals
+    category: core_services
+    weight: 0.20
+    clustering: poly
+    scoring: [0.7]
+    match:
+      nodes:
+        - {amenity: [hospital, hospitals]}
+        - {healthcare: hospital}
+      areas:
+        - {amenity: [hospital, hospitals]}
+        - {healthcare: hospital}
+    human_explanation: "hospital"
+    score_noun: "hospitals"
+    score_noun_access: "hospitals"
+
+  - name: pharmacies
+    display_name: "Pharmacies"
+    score_id: core_services_pharmacies
+    category: core_services
+    weight: 0.10
+    clustering: poly
+    scoring: [0.4, 0.2, 0.1]
+    match:
+      nodes:
+        - {amenity: pharmacy}
+        - {shop: chemist}
+      areas:
+        - {amenity: pharmacy}
+        - {shop: chemist}
+    human_explanation: "pharmacies"
+    score_noun: "pharmacies"
+
+  - name: supermarkets
+    display_name: "Grocery Stores"
+    score_id: core_services_grocery
+    category: core_services
+    weight: 0.25
+    clustering: individual
+    scoring: [0.6, 0.2]
+    match:
+      nodes:
+        - {shop: supermarket}
+      areas:
+        - {shop: supermarket}
+    human_explanation: "grocery"
+    score_noun: "supermarkets"
+    score_noun_access: "grocery stores"
+
+  - name: social_services
+    display_name: "Social Services"
+    score_id: core_services_social_services
+    category: core_services
+    weight: 0.15
+    clustering: individual
+    scoring: [0.7]
+    match:
+      nodes:
+        - {amenity: social_facility}
+      areas:
+        - {amenity: social_facility}
+    human_explanation: "social services"
+    score_noun: "social services"
+
+  # ── Recreation ───────────────────────────────────────────────────────────────
+
+  - name: parks
+    display_name: "Parks"
+    score_id: recreation_parks
+    category: recreation
+    weight: 0.40
+    clustering: poly
+    scoring: [0.3, 0.2, 0.2]
+    match:
+      nodes:
+        - {amenity: park}
+        - {leisure: [park, nature_reserve, playground]}
+      areas:
+        - {amenity: park}
+        - {leisure: [park, nature_reserve, playground]}
+    human_explanation: "parks"
+    score_noun: "parks"
+
+  - name: community_centers
+    display_name: "Community Centers"
+    score_id: recreation_community_centers
+    category: recreation
+    weight: 0.25
+    clustering: poly
+    scoring: [0.4, 0.2, 0.1]
+    match:
+      nodes:
+        - {amenity: [community_centre, community_center]}
+      areas:
+        - {amenity: [community_centre, community_center]}
+    human_explanation: "community centers"
+    score_noun: "community centers"
+
+  - name: trails
+    display_name: "Trails"
+    score_id: recreation_trails
+    type: network_path
+    category: recreation
+    weight: 0.35   # completes parks(0.40) + community_centers(0.25) = 1.00
+    scoring: [0.7, 0.2]
+    match:
+      ways:
+        - {functional_class: path}
+    human_explanation: "trails"
+    score_noun: "trails"
+
+  # ── Retail ───────────────────────────────────────────────────────────────────
+
+  - name: retail
+    display_name: "Retail"
+    score_id: retail
+    category: retail
+    weight: 1.00
+    clustering: retail
+    scoring: [0.4, 0.2, 0.1]
+    match:
+      nodes:
+        - {shop: ~}
+      areas:
+        - {landuse: retail}
+        - {building: retail}
+        - {shop: ~}
+      exclude:
+        - {shop: supermarket}
+        - {shop: "no"}
+    human_explanation: "retail"
+    score_noun: "retail"
+
+  # ── Transit ──────────────────────────────────────────────────────────────────
+
+  - name: transit
+    display_name: "Transit Stops"
+    score_id: transit
+    category: transit
+    weight: 1.00
+    clustering: transit
+    scoring: [0.6]
+    match:
+      nodes:
+        - {amenity: [bus_station, ferry_terminal]}
+        - {railway: station}
+        - {public_transport: station}
+      areas:
+        - {amenity: [bus_station, ferry_terminal]}
+        - {railway: station}
+      exclude:
+        - {aerialway: ~}
+    human_explanation: "transit"
+    score_noun: "transit"

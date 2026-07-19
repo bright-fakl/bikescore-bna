@@ -12,3 +12,10 @@ the dependency direction is app -> core only. See phases/38* in the bna-core rep
 """
 
 __version__ = "0.1.0"
+
+
+from bikescore.config import BNAConfig
+from bikescore.config_resolver import build_config
+from bikescore.scenarios import list_bundled_scenarios
+
+__all__ = ["BNAConfig", "__version__", "build_config", "list_bundled_scenarios"]

@@ -102,6 +102,10 @@ select = ["E", "F", "I", "UP", "RUF", "ANN"]
 ignore = [
     "E501",      # line too long (ruff format handles this)
     "ANN401",    # Any allowed for rule actions
+    "ANN202",    # private-helper return annotations — not enforced on ports (declutter later)
+    "RUF002",    # ambiguous unicode (en/em dash) in docstrings — deliberate prose in ports
+    "RUF003",    # ambiguous unicode in comments — same
+    "RUF022",    # __all__ ordering — ports keep bna-core's semantic grouping
 ]
 
 [tool.ruff.lint.pydocstyle]
