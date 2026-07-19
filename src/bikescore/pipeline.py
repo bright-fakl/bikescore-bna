@@ -22,14 +22,27 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bikescore.stage import StageSpec, run_stage
+from bikescore.stages.attributes import ATTRIBUTES
+from bikescore.stages.census import CENSUS
+from bikescore.stages.jobs import JOBS
+from bikescore.stages.parse import PARSE
+from bikescore.stages.segment import SEGMENT
+from bikescore.stages.stress import STRESS
 
 if TYPE_CHECKING:
     from bikescore.config import BNAConfig
 
-# The fixed stage sequence. Filled in 38d/38e; empty here so the driver + drift-guard
-# land against a stable, minimal surface. Must stay a valid topological order of the
+# The fixed stage sequence. Phase 38d lands the walking skeleton parse -> stress; 38e
+# appends graph -> neighborhood. Must stay a valid topological order of the
 # ``depends_on`` graph (enforced by ``tests/test_pipeline_topology.py``).
-PIPELINE: list[StageSpec] = []
+PIPELINE: list[StageSpec] = [
+    PARSE,
+    CENSUS,
+    JOBS,
+    ATTRIBUTES,
+    SEGMENT,
+    STRESS,
+]
 
 
 @dataclass(frozen=True)
