@@ -1,0 +1,60 @@
+site_name: bikescore
+site_description: Single-city bicycle network analysis as a database-free library
+repo_url: https://github.com/bright-fakl/bikescore
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: teal
+    - scheme: slate
+      primary: teal
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Concepts: concepts.md
+  - How it works:
+      - Overview: how-it-works/index.md
+      - OSM parsing: how-it-works/osm-parsing.md
+      - Road attributes: how-it-works/road-features.md
+      - Level of Traffic Stress: how-it-works/stress.md
+      - Routing network: how-it-works/routing-network.md
+      - Connectivity: how-it-works/connectivity.md
+      - Destinations: how-it-works/destinations.md
+      - Scoring: how-it-works/scoring.md
+      - Neighborhood scores: how-it-works/neighborhood-scores.md
+      - Known deviations: how-it-works/deviations.md
+      - Data acquisition: how-it-works/data-acquisition.md
+  - Tutorials:
+      - Overview: tutorial/index.md
+      - Score a city: tutorial/run-a-city.md
+      - Inspect the LTS network: tutorial/lts-network.md
+      - Customize stress: tutorial/customize-stress.md
+      - Edit stress rules: tutorial/adjust-stress-yaml.md
+      - Add a destination: tutorial/add-destination.md
+  - Reference:
+      - Python API: reference/api.md
+      - CLI: reference/cli.md
+      - Configuration: reference/config.md
+      - Output files: reference/output-files.md
+      - Stress rules: reference/stress-rules.md
+      - Destination catalogs: reference/destinations.md
+      - Extensibility: reference/extensibility.md
+  - Development:
+      - Validation & parity: development/validation.md
+      - Phase log: development/phases.md
+      - Retrospectives: development/retrospectives.md
+      - Contributing: development/contributing.md

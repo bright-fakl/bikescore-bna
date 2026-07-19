@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+site/
+
+# Env
+.env
+
+# Oracle parity baseline is split-time scaffolding only — present locally to validate the
+# port against the frozen bna-core oracle, removed at cutover. NONE of it is committed
+# (data, manifest, regeneration script, or its checksum test). See tests/oracle/README.md.
+tests/oracle/
