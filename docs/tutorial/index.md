@@ -1,8 +1,12 @@
 # Tutorials
 
-!!! note "Phase 38 stub"
-    Task-oriented walkthroughs.
+Practical, task-focused walk-throughs. Start with the first; the rest are independent.
 
-    This page is a scaffolding stub seeded in **Phase 38a** and is filled in during
-    **38g**. See `phases/38-scoring-library-split.md` (Documentation split) in the
-    frozen `bna-core` repo for the source material this page ports.
+1. [Score a city](run-a-city.md) — acquire inputs and run the full pipeline end to end.
+2. [Inspect the LTS network](lts-network.md) — read the per-segment stress output.
+3. [Customize stress](customize-stress.md) — change stress thresholds without touching rules.
+4. [Edit the stress rules](adjust-stress-yaml.md) — author the LTS decision table.
+5. [Add a destination](add-destination.md) — extend the access destination catalog.
+
+All tutorials use the `bikescore-score` CLI and the equivalent Python API
+interchangeably — see [CLI](../reference/cli.md) and [Python API](../reference/api.md).

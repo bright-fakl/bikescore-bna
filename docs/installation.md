@@ -1,8 +1,45 @@
 # Installation
 
-!!! note "Phase 38 stub"
-    Installing bikescore and the optional osmium binary.
+`bikescore` requires **Python 3.11+**.
 
-    This page is a scaffolding stub seeded in **Phase 38a** and is filled in during
-    **38g**. See `phases/38-scoring-library-split.md` (Documentation split) in the
-    frozen `bna-core` repo for the source material this page ports.
+## Install the package
+
+```console
+$ pip install bikescore
+```
+
+or, in a `uv`-managed project:
+
+```console
+$ uv add bikescore
+```
+
+This pulls the scientific stack it depends on (GeoPandas, Shapely, pyproj, SciPy,
+NumPy, pandas/polars, PyArrow) plus `pygris` (US census geometry) and `requests`
+(data acquisition). The library carries **no** web or database dependencies — those
+belong to the separate `bikescore-app` orchestration layer.
+
+## Optional: the `osmium` binary (recommended)
+
+OSM clipping (trimming the regional PBF to the city boundary) shells out to the
+[`osmium-tool`](https://osmcode.org/osmium-tool/) command-line program when it is on
+`PATH`. It is substantially faster than the pure-Python fallback (`pyosmium`, ~8×
+slower), which is used automatically when `osmium` is not found.
+
+```console
+# Debian/Ubuntu
+$ sudo apt install osmium-tool
+# macOS
+$ brew install osmium-tool
+```
+
+Everything works without it — the binary only affects acquisition speed, never results.
+
+## Verify
+
+```console
+$ bikescore-score scenarios
+default
+$ python -c "import bikescore; print(bikescore.__version__)"
+0.1.0
+```

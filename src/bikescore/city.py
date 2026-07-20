@@ -11,6 +11,8 @@ try:
 except ImportError:
     import tomli as tomllib  # type: ignore[no-redef]
 
+_US_COUNTRY_NAMES = frozenset({"united states", "us", "usa", "united states of america"})
+
 
 @dataclass
 class CityIdentity:
@@ -20,6 +22,11 @@ class CityIdentity:
     country: str
     fips_code: str | None = None
     timezone: str | None = None
+
+    @property
+    def is_us(self) -> bool:
+        """True for US cities (census/LODES acquisition applies only to these)."""
+        return self.country.lower() in _US_COUNTRY_NAMES
 
 
 def load_city(city_dir: Path) -> CityIdentity:
