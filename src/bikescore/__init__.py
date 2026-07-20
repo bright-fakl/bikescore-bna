@@ -18,6 +18,13 @@ from bikescore.acquire import InputProvider, acquire_city
 from bikescore.city import CityIdentity, load_city
 from bikescore.config import BNAConfig
 from bikescore.config_resolver import build_config
+from bikescore.export import (
+    ExportContext,
+    export_bundle,
+    export_target,
+    list_export_bundles,
+    list_export_targets,
+)
 from bikescore.pipeline import PIPELINE, ScoreResult, score_city
 from bikescore.scenarios import list_bundled_scenarios
 from bikescore.stage import StageSpec, run_stage
@@ -26,13 +33,18 @@ __all__ = [
     "PIPELINE",
     "BNAConfig",
     "CityIdentity",
+    "ExportContext",
     "InputProvider",
     "ScoreResult",
     "StageSpec",
     "__version__",
     "acquire_city",
     "build_config",
+    "export_bundle",
+    "export_target",
     "list_bundled_scenarios",
+    "list_export_bundles",
+    "list_export_targets",
     "load_city",
     "run_stage",
     "score_city",

@@ -1,8 +1,7 @@
 # Output files
 
-The core library has **no run store and no export bundle**. [`score_city`](api.md)
-runs each stage into a subdirectory of a temporary working directory and returns a
-[`ScoreResult`](api.md):
+The core library has **no run store**. [`score_city`](api.md) runs each stage into a
+subdirectory of a temporary working directory and returns a [`ScoreResult`](api.md):
 
 ```python
 result = score_city(inputs, build_config("default"))
@@ -12,13 +11,15 @@ result.output("stress", "stress.parquet")   # -> Path to a specific output file
 ```
 
 Each stage owns its directory and writes one or more files into it. The filenames and
-schemas below are stable — the orchestration layer (`bikescore-app`) reads exactly these
-files, and content-addressed reuse hashes them. Columns match brokenspoke-analyzer so the
-two tools stay interchangeable for downstream consumers.
+schemas below are stable, and columns match brokenspoke-analyzer so the two tools stay
+interchangeable for downstream consumers.
 
 Geometry columns are written by GeoParquet where the file is a `GeoDataFrame`; the
 destination cluster geometries are stored as EWKB-hex strings (`geom_pt`, `geom_poly`)
 so plain `pandas.to_parquet` can round-trip them with their source CRS.
+
+To turn any of these into GeoJSON / Shapefile / CSV for GIS tools or the PeopleForBikes
+platform, use the [export framework](#export) below.
 
 ## Files by stage
 
@@ -97,3 +98,58 @@ so plain `pandas.to_parquet` can round-trip them with their source CRS.
 | `neighborhood.parquet` | The 23 headline scores: `score_id`, `score_original`, `score_normalized`, `human_explanation` | `score_id` |
 | `score_inputs.parquet` | The 132 intermediate scores (medians, percentiles, shed scores) with `use_*` contribution flags | `id` |
 | `mileage.parquet` | Miles of each bike-infrastructure type within the boundary: `feature_type`, `total_mileage` | `feature_type` |
+
+## Export
+
+The stage outputs above are parquet/pickle — the native format for hashing and reuse. To
+hand them to GIS tools or the PeopleForBikes platform, `bikescore.export` writes them to
+**GeoJSON, Shapefile, or CSV**, reprojecting geometry to WGS84 (EPSG:4326). It works
+directly off a `ScoreResult` — no run store, no database.
+
+```python
+from bikescore import score_city, export_target, export_bundle, load_city
+
+city   = load_city(city_dir)
+config = build_config("default")
+result = score_city(inputs, config)
+
+# one target → one file (road-segment LTS as GeoJSON)
+export_target(result, city, config, "stress", "out/", file_format="geojson", inputs=inputs)
+
+# the whole brokenspoke-analyzer deliverable set
+export_bundle(result, city, config, "out/", bundle="bna", inputs=inputs)
+```
+
+A **target** is one named, exportable output; `export_target` / `export_bundle` build a
+[`ExportContext`](api.md) over the result's `stage_dirs` and write the requested formats.
+`inputs` is the same dict passed to `score_city` — some targets (e.g. `boundary`) read a
+raw dataset directly. `list_export_targets()` / `list_export_bundles()` enumerate what is
+available, and the CLI's [`export-list`](cli.md#export-list) prints the table.
+
+### Targets
+
+| Target | Owner stage | Default formats | Notes |
+|---|---|---|---|
+| `stress` | stress | geojson, shapefile, csv | road segments with LTS — the headline network layer |
+| `ways_raw`, `nodes` | parse | geojson, shapefile, csv | raw ways / nodes |
+| `intersections` | parse | geojson, shapefile, csv | intersection points with `legs`, `signalized`, `stops`, … |
+| `boundary` | parse | geojson, shapefile, csv | the city boundary (reads the raw `boundary` input) |
+| `census_blocks` | census | geojson, shapefile, csv | plain census blocks |
+| `neighborhood_census_blocks` | census | geojson, shapefile, csv | blocks joined to their `scores` |
+| `ways_classified` | attributes | geojson, shapefile, csv | the resolved attribute layer |
+| `segments`, `trails` | segment | geojson, shapefile, csv | split segments / off-network paths |
+| `blocks_with_roads` | graph | geojson, shapefile, csv | blocks with associated road IDs |
+| `destinations` | destinations | geojson, csv | one file **per destination type** (fan-out) |
+| `connectivity` | connectivity | csv | block-pair reachability (`t`/`f` booleans) |
+| `scores` | scores | csv | per-block access scores |
+| `neighborhood_scores`, `score_inputs`, `mileage` | neighborhood | csv | headline / intermediate scores, mileage |
+| `speed_limits` | *config* | csv | residential speed limits from city FIPS + config |
+
+### The `bna` bundle
+
+`export_bundle(..., bundle="bna")` writes the full brokenspoke-analyzer deliverable set
+into one directory, each target under its platform filename (`neighborhood_ways.geojson`,
+`neighborhood_census_blocks.geojson`, `neighborhood_connected_census_blocks.csv`,
+`residential_speed_limit.csv`, …) plus a self-describing `README.md`. `neighborhood_census_blocks`
+and `stress` are **required** (a missing input raises); optional targets whose inputs are
+absent are skipped with a warning.

@@ -204,6 +204,105 @@ def scenarios() -> None:
         _console.print(name)
 
 
+@app.command("export")
+def export_cmd(
+    city: Annotated[str, typer.Argument(help="City directory (with city.toml) or slug.")],
+    target: Annotated[
+        str | None,
+        typer.Option("--target", "-t", help="Single export target (see `export-list`)."),
+    ] = None,
+    bundle: Annotated[
+        str | None,
+        typer.Option("--bundle", "-b", help="Export a named bundle (default: bna if no --target)."),
+    ] = None,
+    file_format: Annotated[
+        str | None,
+        typer.Option("--format", "-f", help="geojson|shapefile|csv (required with --target)."),
+    ] = None,
+    out: Annotated[
+        Path,
+        typer.Option("--out", "-o", help="Destination directory."),
+    ] = Path("./export"),
+    scenario: Annotated[
+        str | None,
+        typer.Option("--scenario", "-s", help="Bundled scenario name or path to a YAML file."),
+    ] = "default",
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="Config override key=value (repeatable)."),
+    ] = None,
+    datasets: Annotated[
+        Path | None,
+        typer.Option("--datasets", help="Raw-input directory (default: <city>/datasets)."),
+    ] = None,
+) -> None:
+    """Run the pipeline for a city and export outputs to GeoJSON/Shapefile/CSV.
+
+    Export a single target (``--target stress --format geojson``) or a whole bundle
+    (``--bundle bna``, the default). The full pipeline runs first — the core keeps no run
+    store to reuse — then the requested outputs are written under ``--out``.
+    """
+    from bikescore.export import export_bundle, export_target
+
+    if target is not None and bundle is not None:
+        _err.print("[red]Pass either --target or --bundle, not both.[/red]")
+        raise typer.Exit(2)
+    if target is not None and file_format is None:
+        _err.print("[red]--format is required with --target.[/red]")
+        raise typer.Exit(2)
+
+    city_dir = _resolve_city_dir(city)
+    identity = _load_identity(city_dir)
+    datasets_dir = datasets if datasets is not None else city_dir / "datasets"
+    inputs = _discover_inputs(datasets_dir)
+    config = build_config(_scenario_arg(scenario), _parse_overrides(set_ or []))
+
+    _err.print(f"[dim]scoring {city_dir.name} for export (scenario={scenario})…[/dim]")
+    result = score_city(inputs, config)
+
+    try:
+        if target is not None:
+            written = export_target(
+                result, identity, config, target, out, file_format=file_format, inputs=inputs,
+            )
+        else:
+            written = export_bundle(
+                result, identity, config, out, bundle=bundle or "bna", inputs=inputs,
+            )
+    except (ValueError, FileNotFoundError) as exc:
+        _err.print(f"[red]Export failed:[/red] {exc}")
+        raise typer.Exit(2) from exc
+
+    for path in written:
+        _console.print(f"[green]wrote[/green] {path}")
+    _console.print(f"[green]{len(written)} file(s) →[/green] {out}")
+    _err.print(f"[dim]all stage outputs under {result.workdir}[/dim]")
+
+
+@app.command("export-list")
+def export_list_cmd() -> None:
+    """List exportable targets (and the bundles that include them)."""
+    from bikescore.export import (
+        _EXPORT_TARGETS,
+        DEFAULT_FORMATS,
+        list_export_bundles,
+        list_export_targets,
+        target_bundles,
+    )
+
+    table = Table("target", "owner stage", "formats", "bundles")
+    for name in list_export_targets():
+        t = _EXPORT_TARGETS[name]
+        table.add_row(
+            name,
+            t.owner_stage or "config",
+            ", ".join(t.formats or DEFAULT_FORMATS[t.kind]),
+            ", ".join(target_bundles(name)) or "—",
+        )
+    _console.print(table)
+    _console.print(f"[dim]bundles: {', '.join(list_export_bundles())}[/dim]")
+
+
 def main() -> None:
     """Console-script entry point (``bikescore-score``)."""
     app()

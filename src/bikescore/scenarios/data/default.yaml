@@ -11,9 +11,6 @@ config:
     output_srid: null
   cache:
     cache_dir: cache
-    ttl_days: 30
-    max_size_gb: null
-    auto_gc: true
   city:
     default_speed: null
     state_default_speed: null

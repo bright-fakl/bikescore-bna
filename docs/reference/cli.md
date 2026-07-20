@@ -1,7 +1,7 @@
 # CLI — `bikescore-score`
 
 The core ships one console script, `bikescore-score`, a thin shell over the
-[Python API](api.md). Three commands, no workspace or database:
+[Python API](api.md). No workspace or database:
 
 ```console
 $ bikescore-score --help
@@ -56,4 +56,49 @@ List the bundled scenario names available to `--scenario`.
 ```console
 $ bikescore-score scenarios
 default
+```
+
+## `export`
+
+Run the pipeline for a city and export outputs to GeoJSON / Shapefile / CSV. The full
+pipeline runs first — the core keeps no run store to reuse — then the requested outputs are
+written under `--out`. See [Output files → Export](output-files.md#export) for the target
+and bundle catalog.
+
+```console
+$ bikescore-score export <city> [OPTIONS]
+```
+
+| option | default | meaning |
+|---|---|---|
+| `--target`, `-t` | — | a single [export target](output-files.md#targets); requires `--format` |
+| `--bundle`, `-b` | `bna` (if no `--target`) | export a named bundle of targets |
+| `--format`, `-f` | — | `geojson` \| `shapefile` \| `csv` (with `--target`) |
+| `--out`, `-o` | `./export` | destination directory |
+| `--scenario`, `-s` | `default` | bundled scenario name or a scenario YAML path |
+| `--set k=v` | — | config override (repeatable) |
+| `--datasets` | `<city>/datasets` | directory holding the raw inputs |
+
+Pass either `--target` or `--bundle`, not both. Export the road-segment stress network as
+GeoJSON:
+
+```console
+$ bikescore-score export ./aspen-colorado --target stress --format geojson --out ./gis
+wrote gis/stress.geojson
+1 file(s) → ./gis
+```
+
+…or the whole brokenspoke-analyzer deliverable set:
+
+```console
+$ bikescore-score export ./aspen-colorado --bundle bna --out ./results
+```
+
+## `export-list`
+
+List the exportable targets, their owner stage, supported formats, and the bundles that
+include each.
+
+```console
+$ bikescore-score export-list
 ```

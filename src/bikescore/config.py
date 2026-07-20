@@ -296,17 +296,14 @@ def apply_project_export_dir(config: BNAConfig, project_dir: Path) -> BNAConfig:
 
 @dataclass
 class CacheConfig:
-    """Controls pipeline checkpoint storage."""
+    """Filesystem cache location for the core.
+
+    The only field the scoring core reads is ``cache_dir`` (where ``parse`` caches the
+    clipped regional PBF). Run-store / GC policy — TTL, size caps, orphan collection — is
+    the orchestration layer's concern and lives there, not here.
+    """
 
     cache_dir: Path = field(default_factory=lambda: Path("./cache"))
-    ttl_days: int = 30
-    """Run manifests older than this are pruned. Stage entries orphaned by pruning are GC'd."""
-
-    max_size_gb: float | None = None
-    """Optional size cap per city. Oldest runs deleted first if exceeded."""
-
-    auto_gc: bool = True
-    """Automatically GC orphaned stage entries after each pipeline run."""
 
 
 # ── Top-level config ──────────────────────────────────────────────────────────
