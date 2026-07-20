@@ -24,8 +24,13 @@ from typing import TYPE_CHECKING
 from bikescore.stage import StageSpec, run_stage
 from bikescore.stages.attributes import ATTRIBUTES
 from bikescore.stages.census import CENSUS
+from bikescore.stages.connectivity import CONNECTIVITY
+from bikescore.stages.destinations import DESTINATIONS
+from bikescore.stages.graph import GRAPH
 from bikescore.stages.jobs import JOBS
+from bikescore.stages.neighborhood import NEIGHBORHOOD
 from bikescore.stages.parse import PARSE
+from bikescore.stages.scores import SCORES
 from bikescore.stages.segment import SEGMENT
 from bikescore.stages.stress import STRESS
 
@@ -42,6 +47,11 @@ PIPELINE: list[StageSpec] = [
     ATTRIBUTES,
     SEGMENT,
     STRESS,
+    GRAPH,
+    CONNECTIVITY,
+    DESTINATIONS,
+    SCORES,
+    NEIGHBORHOOD,
 ]
 
 
