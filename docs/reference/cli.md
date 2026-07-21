@@ -126,3 +126,51 @@ include each.
 ```console
 $ bikescore-score export-list
 ```
+
+## Working with multiple datasets
+
+The scoring core is a **stateless function of explicit inputs** — it remembers nothing
+between calls. A "dataset" is just a **directory of the five role-named files** (`osm-*`,
+`boundary-*`, `census-*`, `lodes_main-*`, `lodes_aux-*`); there is no registry. So you
+handle many datasets — or many cities — simply by **looping the same commands**, one
+input directory at a time:
+
+```console
+# same city, two input sets (e.g. this year's OSM vs a fresh re-pull)
+$ bikescore-score acquire ./aspen-colorado --out-dir ./inputs/2024
+$ bikescore-score acquire ./aspen-colorado --out-dir ./inputs/2025 --force
+$ bikescore-score score ./aspen-colorado --datasets ./inputs/2024 --out scores-2024.parquet
+$ bikescore-score score ./aspen-colorado --datasets ./inputs/2025 --out scores-2025.parquet
+```
+
+Nothing here needs the app: files are content-addressed (re-acquiring identical bytes is a
+no-op) and the regional-PBF cache is shared across directories (only the clip differs).
+
+From Python the loop is just as direct. `discover_inputs(dir)` turns a directory into the
+`{role: Path}` mapping `score_city` wants, so batching over cities is a plain `for`:
+
+```python
+from bikescore import build_config, discover_inputs, score_city
+
+config = build_config("default")
+for city_dir in ("./aspen-colorado", "./boulder-colorado", "./denver-colorado"):
+    result = score_city(discover_inputs(f"{city_dir}/datasets"), config)
+    ...
+```
+
+Because the input is an explicit dict, you can also reuse most of one dataset and swap a
+single role — e.g. score against an alternate OSM extract without re-acquiring the rest:
+
+```python
+from pathlib import Path
+
+inputs = discover_inputs("./inputs/2024")
+inputs["osm"] = Path("./inputs/2025/osm-abc123.pbf")
+score_city(inputs, config)
+```
+
+What the core deliberately does *not* do is **track** any of this: giving datasets names
+and IDs, versioning them, deduping them as entities, recording provenance, or comparing
+runs across them. That bookkeeping is a system-of-record concern and lives in
+bikescore-app — the split is stateless computation (core) vs. system of record (app), not
+"one dataset (core) vs. many (app)."

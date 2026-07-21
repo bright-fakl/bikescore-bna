@@ -28,6 +28,7 @@ from bikescore import (
     CityIdentity,
     acquire_city,
     build_config,
+    discover_inputs,
     list_bundled_scenarios,
     score_city,
 )
@@ -40,16 +41,6 @@ app = typer.Typer(
 )
 _console = Console()
 _err = Console(stderr=True)
-
-# Raw-input discovery: role -> glob under the datasets dir (acquire's naming).
-_INPUT_GLOBS = {
-    "osm": "osm-*.pbf",
-    "boundary": "boundary-*.geojson",
-    "census": "census-*.parquet",
-    "lodes_main": "lodes_main-*.csv",
-    "lodes_aux": "lodes_aux-*.csv",
-}
-
 
 def _resolve_city_dir(city: str) -> Path:
     """Resolve *city* (a path to a directory containing ``city.toml``) to its directory."""
@@ -79,11 +70,7 @@ def _discover_inputs(datasets_dir: Path) -> dict[str, Path]:
             f"Run [bold]bikescore-score acquire[/bold] first, or pass --datasets."
         )
         raise typer.Exit(2)
-    inputs: dict[str, Path] = {}
-    for role, pattern in _INPUT_GLOBS.items():
-        hits = sorted(datasets_dir.glob(pattern))
-        if hits:
-            inputs[role] = hits[0]
+    inputs = discover_inputs(datasets_dir)
     if not inputs:
         _err.print(f"[red]No input files found in[/red] {datasets_dir}")
         raise typer.Exit(2)

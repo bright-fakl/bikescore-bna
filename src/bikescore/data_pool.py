@@ -1,17 +1,14 @@
 """Content-addressed source-data pool for a single-city output directory.
 
 ``acquire_city`` writes each acquired file here under a content-addressed name so a
-re-download of the same bytes always lands on the same filename (the acquisition date
-lives in the ledger, not the name). This is the DB-free slice of bna-core's
-``data_pool``: only ``store_file`` + ``update_ledger`` are core concerns. The
-dataset-set / stage-meta garbage-collection helpers (``refresh_ledger`` /
-``unreferenced_files``) are workspace bookkeeping and stay in the orchestration app.
+re-download of the same bytes always lands on the same filename. Only ``store_file`` is
+a core concern — a pure content-addressed blob write. Dataset metadata, provenance
+ledgers, and garbage collection are workspace bookkeeping and live in the app.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 from pathlib import Path
 
@@ -41,19 +38,3 @@ def store_file(data_dir: Path, file_type: str, src_path: Path, ext: str | None =
     else:
         src_path.unlink(missing_ok=True)
     return name
-
-
-def update_ledger(data_dir: Path, filename: str, metadata: dict) -> None:
-    """Add or update an entry in ``data_dir/meta.json``. Never removes existing entries."""
-    ledger_path = data_dir / "meta.json"
-    ledger = {}
-    if ledger_path.exists():
-        try:
-            ledger = json.loads(ledger_path.read_text())
-        except Exception:
-            pass
-    entry = {**metadata, "present": (data_dir / filename).exists()}
-    ledger[filename] = entry
-    tmp = ledger_path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(ledger, indent=2))
-    tmp.replace(ledger_path)

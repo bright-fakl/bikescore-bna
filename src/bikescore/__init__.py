@@ -14,7 +14,7 @@ the dependency direction is app -> core only. See phases/38* in the bna-core rep
 __version__ = "0.1.0"
 
 
-from bikescore.acquire import InputProvider, acquire_city
+from bikescore.acquire import InputProvider, acquire_city, discover_inputs
 from bikescore.city import CityIdentity, load_city
 from bikescore.config import BNAConfig
 from bikescore.config_resolver import build_config
@@ -40,6 +40,7 @@ __all__ = [
     "__version__",
     "acquire_city",
     "build_config",
+    "discover_inputs",
     "get_bundled_scenario",
     "export_bundle",
     "export_target",

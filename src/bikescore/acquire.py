@@ -23,7 +23,6 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -32,7 +31,7 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, runtime_checkable
 
 import requests
 
-from bikescore.data_pool import store_file, update_ledger
+from bikescore.data_pool import store_file
 
 if TYPE_CHECKING:
     import geopandas as gpd
@@ -121,6 +120,7 @@ class PbfMeta(NamedTuple):
     sha256: str
     cached_filename: str = ""
 
+
 _PBF_CACHE_ENV = "BIKESCORE_PBF_CACHE"
 
 
@@ -133,7 +133,6 @@ def _default_pbf_cache_dir() -> Path:
     """
     env = os.environ.get(_PBF_CACHE_ENV)
     return Path(env).expanduser() if env else Path.home() / ".bikescore" / "pbf"
-
 
 
 @dataclass
@@ -337,21 +336,6 @@ def _download_state_pbf(city: CityIdentity, config: AcquireConfig) -> tuple[Path
     return cache_path, meta
 
 
-def _detect_osmium_version() -> str:
-    """Detect the osmium-tool version string (``osmium/x.y.z`` or ``osmium/unknown``)."""
-    try:
-        result = subprocess.run(
-            ["osmium", "version"], capture_output=True, text=True, timeout=5,
-        )
-        line = (result.stdout or result.stderr or "").strip().split("\n")[0]
-        if "version" in line.lower():
-            ver = line.lower().split("version")[-1].strip().split()[0]
-            return f"osmium/{ver}"
-    except Exception:
-        pass
-    return "osmium/unknown"
-
-
 # ── Census blocks (US only) ──────────────────────────────────────────────────
 
 def _download_census_blocks_tmp(
@@ -505,13 +489,9 @@ class UsCensusLodesProvider:
             result["boundary"] = self._store(config, "boundary", boundary_tmp, ".geojson")
 
             # ── Regional PBF → clip to boundary ───────────────────────────
-            region_pbf, pbf_meta = _download_state_pbf(city, config)
+            region_pbf, _ = _download_state_pbf(city, config)
             clipped_tmp = pre_clip_pbf(region_pbf, boundary_gdf, 0.0, tmp_dir)
-            result["osm"] = self._store(
-                config, "osm", clipped_tmp, ".pbf",
-                {"source_url": pbf_meta.url, "source_sha256": pbf_meta.sha256,
-                 "clip_tool": _detect_osmium_version()},
-            )
+            result["osm"] = self._store(config, "osm", clipped_tmp, ".pbf")
 
             # ── Census + LODES (US only) ──────────────────────────────────
             if city.is_us and city.fips_code is not None:
@@ -532,18 +512,10 @@ class UsCensusLodesProvider:
         return result
 
     @staticmethod
-    def _store(
-        config: AcquireConfig, role: str, tmp_path: Path, ext: str,
-        extra_meta: dict | None = None,
-    ) -> Path:
+    def _store(config: AcquireConfig, role: str, tmp_path: Path, ext: str) -> Path:
         name = store_file(config.project_data_dir, role, tmp_path, ext)
-        stored = config.project_data_dir / name
-        meta = {"type": role, "size_mb": round(stored.stat().st_size / 1e6, 3)}
-        if extra_meta:
-            meta.update(extra_meta)
-        update_ledger(config.project_data_dir, name, meta)
         _logger.info("acquire  %s saved: %s", role, name)
-        return stored
+        return config.project_data_dir / name
 
 
 _DEFAULT_PROVIDER = UsCensusLodesProvider()
@@ -573,3 +545,33 @@ def acquire_city(
     """
     prov = provider if provider is not None else UsCensusLodesProvider(pbf_cache_dir)
     return prov.acquire(city, Path(out_dir), force=force)
+
+
+# Role -> glob for the content-addressed files acquire_city writes into a directory.
+_INPUT_GLOBS: dict[str, str] = {
+    "osm": "osm-*.pbf",
+    "boundary": "boundary-*.geojson",
+    "census": "census-*.parquet",
+    "lodes_main": "lodes_main-*.csv",
+    "lodes_aux": "lodes_aux-*.csv",
+}
+
+
+def discover_inputs(datasets_dir: Path | str) -> dict[str, Path]:
+    """Map ``acquire_city``'s files in *datasets_dir* to the ``{role: Path}`` score_city wants.
+
+    Reads the role-named outputs (``osm-*.pbf``, ``boundary-*.geojson``, ``census-*.parquet``,
+    ``lodes_main-*.csv``, ``lodes_aux-*.csv``). Roles with no matching file are omitted
+    (non-US cities have no census/LODES). Stateless directory I/O — no registry, first
+    match per role. Loop it over several directories to score several input sets:
+
+        for d in dirs:
+            score_city(discover_inputs(d), config)
+    """
+    d = Path(datasets_dir)
+    inputs: dict[str, Path] = {}
+    for role, pattern in _INPUT_GLOBS.items():
+        hits = sorted(d.glob(pattern))
+        if hits:
+            inputs[role] = hits[0]
+    return inputs

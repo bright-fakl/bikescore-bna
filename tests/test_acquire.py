@@ -32,7 +32,7 @@ from bikescore.acquire import (
     _pbf_rel_path_from_url,
     _state_abbr_from_fips,
 )
-from bikescore.data_pool import store_file, update_ledger
+from bikescore.data_pool import store_file
 from bikescore.deviations import KNOWN_DEVIATIONS
 from bikescore.validation import compare_dataframes
 
@@ -103,17 +103,6 @@ def test_store_file_content_addressed_and_idempotent(tmp_path: Path) -> None:
     assert name2 == name1
     assert not src2.exists()
 
-
-def test_update_ledger_accumulates(tmp_path: Path) -> None:
-    d = tmp_path / "data"
-    d.mkdir()
-    (d / "osm-abc.pbf").write_bytes(b"x")
-    update_ledger(d, "osm-abc.pbf", {"type": "osm"})
-    update_ledger(d, "boundary-def.geojson", {"type": "boundary"})
-    ledger = json.loads((d / "meta.json").read_text())
-    assert set(ledger) == {"osm-abc.pbf", "boundary-def.geojson"}
-    assert ledger["osm-abc.pbf"]["present"] is True
-    assert ledger["boundary-def.geojson"]["present"] is False  # file not written
 
 
 def test_find_pbf_by_url_roundtrip(tmp_path: Path) -> None:
@@ -215,3 +204,20 @@ def test_acquire_city_output_scores_to_oracle() -> None:
             key_col=key, columns=cols, deviations=KNOWN_DEVIATIONS,
         )
         assert report.passed and report.rows_differing == 0, f"{stage}/{filename} != oracle"
+
+
+def test_discover_inputs_maps_roles(tmp_path: Path) -> None:
+    from bikescore import discover_inputs
+
+    d = tmp_path / "datasets"
+    d.mkdir()
+    (d / "osm-abc123.pbf").write_bytes(b"x")
+    (d / "boundary-def456.geojson").write_text("{}")
+    (d / "census-789abc.parquet").write_bytes(b"x")
+    # non-input files ignored
+    (d / "scores.parquet").write_bytes(b"x")
+
+    inputs = discover_inputs(d)
+    assert set(inputs) == {"osm", "boundary", "census"}  # lodes absent → omitted
+    assert inputs["osm"].name == "osm-abc123.pbf"
+    assert discover_inputs(tmp_path / "nonexistent") == {}
