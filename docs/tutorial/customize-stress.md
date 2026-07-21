@@ -8,7 +8,7 @@ as one-off overrides or as a saved scenario.
 
 ```console
 $ bikescore-score score ./aspen-colorado \
-    --set imputation.city_default_speed=40 \
+    --set city.default_speed=40 \
     --set imputation.default_lanes=2
 ```
 
@@ -17,7 +17,7 @@ bool / string automatically. In Python, pass an overrides dict:
 
 ```python
 from bikescore import build_config, score_city
-config = build_config("default", {"imputation.city_default_speed": 40})
+config = build_config("default", {"city.default_speed": 40})
 result = score_city(inputs, config)
 ```
 

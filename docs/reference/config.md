@@ -29,7 +29,7 @@ build_config(scenario: str | dict | Path | None = None,
 
 `overrides` is a flat `{"section.field": value}` map applied **last**, over whatever the
 scenario produced — the same key space the CLI's `--set` uses (e.g.
-`--set imputation.city_default_speed=40`). Overrides are scalar-only; structural changes
+`--set city.default_speed=40`). Overrides are scalar-only; structural changes
 (rules, catalogs, attributes) belong in a scenario.
 
 !!! info "Scenarios, not a stack"

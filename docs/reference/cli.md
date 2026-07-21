@@ -21,7 +21,8 @@ $ bikescore-score score <city> [OPTIONS]
 | option | default | meaning |
 |---|---|---|
 | `--scenario`, `-s` | `default` | bundled scenario name, or a path to a scenario YAML |
-| `--set k=v` | — | config override (repeatable), e.g. `--set imputation.city_default_speed=40` |
+| `--set k=v` | — | config override (repeatable), e.g. `--set city.default_speed=40` |
+| `--set-file` | — | YAML file of `key: value` overrides (merged under `--set`) |
 | `--out`, `-o` | `scores.parquet` | where to write the scores table |
 | `--datasets` | `<city>/datasets` | directory holding the raw inputs |
 | `--to` | — | stop after this stage (partial run) |
@@ -41,12 +42,16 @@ scores → scores.parquet
 Download the raw inputs (OSM, boundary, and — for US cities — census + LODES).
 
 ```console
-$ bikescore-score acquire <city> [--out-dir ./data] [--force]
+$ bikescore-score acquire <city> [--out-dir DIR] [--pbf-cache-dir DIR] [--force]
 ```
 
-`--out-dir` is where the content-addressed input files land (default `./data`);
-`--force` re-downloads the shared regional PBF even on a cache hit. See
-[Data acquisition](../how-it-works/data-acquisition.md).
+`--out-dir` is where the content-addressed input files land — it **defaults to
+`<city>/datasets/`**, the same place `score`/`export` read from, so `acquire <city>`
+then `score <city>` works with no flags. Point it elsewhere to keep several input sets
+side by side (see [Working with multiple datasets](#working-with-multiple-datasets));
+`--pbf-cache-dir` relocates the shared regional-PBF cache (default `$BIKESCORE_PBF_CACHE`
+or `~/.bikescore/pbf`); `--force` re-downloads the shared regional PBF even on a cache
+hit. See [Data acquisition](../how-it-works/data-acquisition.md).
 
 ## `scenarios`
 
@@ -56,6 +61,25 @@ List the bundled scenario names available to `--scenario`.
 $ bikescore-score scenarios
 default
 ```
+
+## `scenario show`
+
+Dump a bundled scenario's YAML so you can copy, edit, and feed it back via `--scenario FILE`.
+Prints to stdout (redirect or pipe it), or use `--out` to write a file.
+
+```console
+$ bikescore-score scenario show default > my-scenario.yaml
+# …edit my-scenario.yaml…
+$ bikescore-score score ./aspen-colorado --scenario my-scenario.yaml
+```
+
+| option | default | meaning |
+|---|---|---|
+| `--out`, `-o` | — | write the YAML to this file instead of stdout |
+
+`<name>` may pin a version (e.g. `default@1`). A reusable scenario is one self-contained
+YAML file; keep policy in the scenario and put per-run scalar tweaks in a separate
+`--set-file` (or `--set`) so the scenario stays reusable.
 
 ## `export`
 
@@ -76,6 +100,7 @@ $ bikescore-score export <city> [OPTIONS]
 | `--out`, `-o` | `./export` | destination directory |
 | `--scenario`, `-s` | `default` | bundled scenario name or a scenario YAML path |
 | `--set k=v` | — | config override (repeatable) |
+| `--set-file` | — | YAML file of `key: value` overrides (merged under `--set`) |
 | `--datasets` | `<city>/datasets` | directory holding the raw inputs |
 
 Pass either `--target` or `--bundle`, not both. Export the road-segment stress network as

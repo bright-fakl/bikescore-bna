@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -71,7 +72,7 @@ def _load_identity(city_dir: Path) -> CityIdentity:
 
 
 def _discover_inputs(datasets_dir: Path) -> dict[str, Path]:
-    """Find the raw inputs under *datasets_dir*; error if none present."""
+    """CLI wrapper over ``discover_inputs`` with friendly errors (exit 2 if empty)."""
     if not datasets_dir.is_dir():
         _err.print(
             f"[red]No datasets directory:[/red] {datasets_dir}\n"
@@ -113,6 +114,22 @@ def _parse_overrides(pairs: list[str]) -> dict[str, Any]:
     return overrides
 
 
+def _load_override_file(path: Path) -> dict[str, Any]:
+    """Load dotted-key config overrides from a YAML mapping file (``key: value``).
+
+    A reusable scenario carries structure; this file carries only the scalar one-offs —
+    the same space as ``--set``. Inline ``--set`` flags take precedence over the file.
+    """
+    if not path.is_file():
+        _err.print(f"[red]--set-file not found:[/red] {path}")
+        raise typer.Exit(2)
+    data = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(data, dict):
+        _err.print("[red]--set-file must be a mapping of key: value.[/red]")
+        raise typer.Exit(2)
+    return {str(k): v for k, v in data.items()}
+
+
 def _scenario_arg(scenario: str | None) -> str | Path | None:
     """A ``--scenario`` value is a bundled name, or a path to a YAML file."""
     if scenario is None:
@@ -134,6 +151,10 @@ def score(
         list[str] | None,
         typer.Option("--set", help="Config override key=value (repeatable)."),
     ] = None,
+    set_file: Annotated[
+        Path | None,
+        typer.Option("--set-file", help="YAML file of dotted-key overrides (merged under --set)."),
+    ] = None,
     out: Annotated[
         Path | None,
         typer.Option("--out", "-o", help="Write scores.parquet here (default: ./scores.parquet)."),
@@ -153,7 +174,10 @@ def score(
     datasets_dir = datasets if datasets is not None else city_dir / "datasets"
     inputs = _discover_inputs(datasets_dir)
 
-    config = build_config(_scenario_arg(scenario), _parse_overrides(set_ or []))
+    overrides = _parse_overrides(set_ or [])
+    if set_file is not None:
+        overrides = {**_load_override_file(set_file), **overrides}
+    config = build_config(_scenario_arg(scenario), overrides)
 
     _err.print(f"[dim]scoring {city_dir.name} ({len(inputs)} inputs, scenario={scenario})…[/dim]")
     result = score_city(inputs, config, to_stage=to_stage)
@@ -173,8 +197,16 @@ def score(
 def acquire(
     city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
     out_dir: Annotated[
-        Path, typer.Option("--out-dir", help="Directory to write inputs into."),
-    ] = Path("./data"),
+        Path | None,
+        typer.Option("--out-dir", help="Directory to write inputs into (default: <city>/datasets)."),
+    ] = None,
+    pbf_cache_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--pbf-cache-dir",
+            help="Shared regional-PBF cache dir (default: $BIKESCORE_PBF_CACHE or ~/.bikescore/pbf).",
+        ),
+    ] = None,
     force: Annotated[
         bool, typer.Option("--force", help="Re-download the regional PBF even if cached."),
     ] = False,
@@ -182,8 +214,9 @@ def acquire(
     """Download the raw inputs (OSM, boundary, census, LODES) for a city."""
     city_dir = _resolve_city_dir(city)
     identity = _load_identity(city_dir)
-    _err.print(f"[dim]acquiring inputs for {identity.name}…[/dim]")
-    files = acquire_city(identity, out_dir, force=force)
+    out_dir = out_dir if out_dir is not None else city_dir / "datasets"
+    _err.print(f"[dim]acquiring inputs for {identity.name} → {out_dir}…[/dim]")
+    files = acquire_city(identity, out_dir, pbf_cache_dir=pbf_cache_dir, force=force)
 
     table = Table("input", "path")
     for role in sorted(files):
@@ -196,6 +229,34 @@ def scenarios() -> None:
     """List the bundled scenario names available to ``--scenario``."""
     for name in list_bundled_scenarios():
         _console.print(name)
+
+
+scenario_app = typer.Typer(no_args_is_help=True, help="Inspect bundled scenarios.")
+app.add_typer(scenario_app, name="scenario")
+
+
+@scenario_app.command("show")
+def scenario_show(
+    name: Annotated[str, typer.Argument(help="Bundled scenario name (e.g. 'default', 'default@1').")],
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", "-o", help="Write the YAML to this file instead of stdout."),
+    ] = None,
+) -> None:
+    """Dump a bundled scenario's YAML — copy it, edit, then run with ``--scenario FILE``."""
+    from bikescore.scenarios import ScenarioNotFoundError, get_bundled_scenario
+
+    try:
+        text = get_bundled_scenario(name)
+    except ScenarioNotFoundError as exc:
+        _err.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+        _console.print(f"[green]scenario {name!r} →[/green] {out}")
+    else:
+        typer.echo(text, nl=False)  # raw YAML so it pipes / redirects cleanly
 
 
 @app.command("export")
@@ -225,6 +286,10 @@ def export_cmd(
         list[str] | None,
         typer.Option("--set", help="Config override key=value (repeatable)."),
     ] = None,
+    set_file: Annotated[
+        Path | None,
+        typer.Option("--set-file", help="YAML file of dotted-key overrides (merged under --set)."),
+    ] = None,
     datasets: Annotated[
         Path | None,
         typer.Option("--datasets", help="Raw-input directory (default: <city>/datasets)."),
@@ -249,7 +314,10 @@ def export_cmd(
     identity = _load_identity(city_dir)
     datasets_dir = datasets if datasets is not None else city_dir / "datasets"
     inputs = _discover_inputs(datasets_dir)
-    config = build_config(_scenario_arg(scenario), _parse_overrides(set_ or []))
+    overrides = _parse_overrides(set_ or [])
+    if set_file is not None:
+        overrides = {**_load_override_file(set_file), **overrides}
+    config = build_config(_scenario_arg(scenario), overrides)
 
     _err.print(f"[dim]scoring {city_dir.name} for export (scenario={scenario})…[/dim]")
     result = score_city(inputs, config)

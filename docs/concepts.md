@@ -35,7 +35,7 @@ catalogs, and the LTS decision rules. You never construct it directly; you call
 build_config()                 # library defaults
 build_config("default")        # the bundled standard-BNA scenario
 build_config("my.yaml")        # a scenario file you authored
-build_config("default", {"imputation.city_default_speed": 40})  # with overrides
+build_config("default", {"city.default_speed": 40})  # with overrides
 ```
 
 A **scenario** is a YAML document describing a config *layer* — the rules, catalogs, and
