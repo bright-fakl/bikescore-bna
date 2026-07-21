@@ -352,6 +352,106 @@ def export_list_cmd() -> None:
     _console.print(f"[dim]bundles: {', '.join(list_export_bundles())}[/dim]")
 
 
+@app.command("validate")
+def validate_cmd(
+    city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
+    reference: Annotated[
+        Path,
+        typer.Option("--reference", "-r",
+                     help="Reference dir with <stage>/<file>.parquet (e.g. tests/oracle/aspen)."),
+    ],
+    stage: Annotated[
+        str | None,
+        typer.Option("--stage", help="Validate only this stage (default: all stages)."),
+    ] = None,
+    datasets: Annotated[
+        Path | None,
+        typer.Option("--datasets", help="Raw-input directory (default: <city>/datasets)."),
+    ] = None,
+    scenario: Annotated[
+        str | None,
+        typer.Option("--scenario", "-s", help="Bundled scenario name or path to a YAML file."),
+    ] = "default",
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="Config override key=value (repeatable)."),
+    ] = None,
+    set_file: Annotated[
+        Path | None,
+        typer.Option("--set-file", help="YAML file of dotted-key overrides (merged under --set)."),
+    ] = None,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Do not annotate known SQL deviations as expected."),
+    ] = False,
+) -> None:
+    """Score a city and compare each stage output against a reference directory.
+
+    The reference holds ``<stage>/<file>.parquet`` (the tests/oracle/aspen layout, or a
+    brokenspoke-analyzer export). Prints a per-stage pass/fail table and exits non-zero if
+    any stage differs. Use --stage to check one stage (a faster partial run).
+    """
+    from bikescore.deviations import KNOWN_DEVIATIONS
+    from bikescore.parity import validate_result
+
+    city_dir = _resolve_city_dir(city)
+    _load_identity(city_dir)
+    if not reference.is_dir():
+        _err.print(f"[red]No reference directory:[/red] {reference}")
+        raise typer.Exit(2)
+    datasets_dir = datasets if datasets is not None else city_dir / "datasets"
+    inputs = _discover_inputs(datasets_dir)
+
+    overrides = _parse_overrides(set_ or [])
+    if set_file is not None:
+        overrides = {**_load_override_file(set_file), **overrides}
+    config = build_config(_scenario_arg(scenario), overrides)
+
+    _err.print(f"[dim]scoring {city_dir.name} for validation (scenario={scenario})…[/dim]")
+    try:
+        result = score_city(inputs, config, to_stage=stage) if stage else score_city(inputs, config)
+    except ValueError as exc:
+        _err.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+
+    results = validate_result(
+        result, reference, city=city_dir.name,
+        stages=[stage] if stage else None,
+        deviations=None if strict else KNOWN_DEVIATIONS,
+    )
+    if not results:
+        _err.print(f"[yellow]No matching stage references found under[/yellow] {reference}")
+        raise typer.Exit(2)
+
+    table = Table("stage / case", "matched", "differing", "explained", "+comp", "+ref", "result")
+    n_fail = 0
+    n_skip = 0
+    for sp in results:
+        if sp.report is None:
+            table.add_row(sp.case, "—", "—", "—", "—", "—", f"[dim]skip ({sp.skip_reason})[/dim]")
+            n_skip += 1
+            continue
+        rep = sp.report
+        verdict = "[green]PASS[/green]" if sp.passed else "[red]FAIL[/red]"
+        if not sp.passed:
+            n_fail += 1
+        table.add_row(
+            sp.case, str(rep.rows_total), str(rep.rows_differing),
+            str(rep.deviation_explained_rows), str(rep.rows_only_computed),
+            str(rep.rows_only_reference), verdict,
+        )
+    _console.print(table)
+
+    compared = len(results) - n_skip
+    if n_fail:
+        _err.print(f"[red]{n_fail}/{compared} stage(s) differ from the reference.[/red]")
+        raise typer.Exit(1)
+    _console.print(
+        f"[green]all {compared} compared stage(s) match[/green]"
+        + (f" ([dim]{n_skip} skipped[/dim])" if n_skip else "")
+    )
+
+
 def main() -> None:
     """Console-script entry point (``bikescore-score``)."""
     app()

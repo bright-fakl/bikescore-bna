@@ -1,66 +1,90 @@
 # Validation
 
-!!! note "Internal use"
-    Validation requires a running [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
-    instance and a reference export tool that is not yet publicly released.
-    This page is intended for bikescore contributors verifying correctness
-    against the SQL reference implementation.
+bikescore validates its output **stage by stage** against a *reference directory* — a
+ground-truth set of per-stage parquets. The repo ships one: `tests/oracle/aspen`, the
+frozen bna-core output for Aspen, Colorado (the maintainer's manual validation city).
+References can also be exported from [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer),
+the original SQL/PostGIS implementation.
 
-bikescore can validate its output stage-by-stage against reference parquets
-exported from brokenspoke-analyzer (the original SQL/PostGIS implementation).
+A reference directory holds one parquet per stage output:
 
-## Export reference data
-
-Export reference parquets from a running brokenspoke-analyzer instance:
-
-```bash
-uv run python tools/export_reference.py washington-district-of-columbia --all
 ```
-
-Reference parquets land in `tests/reference/{slug}/stages/`.
+<reference>/
+  parse/ways_raw.parquet   parse/nodes.parquet
+  stress/stress.parquet
+  scores/scores.parquet
+  neighborhood/neighborhood.parquet  …
+  destinations/dest_<type>.parquet   …
+```
 
 ## Run validation (CLI)
 
+Score a city and compare every stage output against the reference:
+
 ```bash
-bikescore validate washington-district-of-columbia --stage stress
+bikescore-score validate <city> --reference tests/oracle/aspen
 ```
 
-Output is a Markdown report showing row coverage, differing values, and any
-declared deviations.
+`<city>` is a path to a city directory (its inputs are read from `<city>/datasets`, or
+pass `--datasets DIR`). Add `--stage stress` to validate a single stage (a faster partial
+run). Other options mirror `score`: `--scenario`, `--set`, `--set-file`.
+
+The command prints a per-stage table and **exits non-zero if any stage differs**:
+
+```
+┏━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━━┓
+┃ stage / case ┃ matched ┃ differing ┃ explained ┃ +comp ┃ +ref ┃ result ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━━┩
+│ stress       │ 831     │ 0         │ 0         │ 0     │ 0    │ PASS   │
+└──────────────┴─────────┴───────────┴───────────┴───────┴──────┴────────┘
+```
+
+Known SQL divergences are annotated as *expected* (the `explained` column) and do not
+fail the run; pass `--strict` to treat them as differences.
 
 ## Run validation (Python)
 
+The same harness is a library function — score a city, then compare the result:
+
 ```python
-from bikescore import Pipeline, BNAConfig
-from bikescore.city import City
-from bikescore.validation import Reference
+from bikescore import build_config, discover_inputs, score_city
+from bikescore.parity import validate_result
+from bikescore.deviations import KNOWN_DEVIATIONS
 
-city = City(name="washington", country="united states", region="district of columbia")
-pipeline = Pipeline(city, BNAConfig.with_defaults(), cache_dir=".")
-pipeline.load_from_cache("stress")
+result = score_city(discover_inputs("aspen-colorado/datasets"), build_config("default"))
 
-ref = Reference("tests/reference/washington-district-of-columbia")
-reports = pipeline.validate("stress", ref)
-for r in reports:
-    r.print_summary()
+for sp in validate_result(
+    result, "tests/oracle/aspen", city="aspen-colorado", deviations=KNOWN_DEVIATIONS
+):
+    if sp.report is None:
+        continue  # stage skipped (reference/computed file absent)
+    print(sp.case, "PASS" if sp.passed else "FAIL")
+    if not sp.passed:
+        sp.report.print()   # detailed column/row diff
 ```
+
+`validate_result` returns one [`StageParity`](#) per stage output (in pipeline order);
+`stages=[...]` restricts the comparison to named stages.
 
 ## Validation report fields
 
+Each `StageParity.report` is a `ValidationReport`:
+
 | Field | Description |
 |---|---|
-| `passed` | `True` when all diffs are within tolerance or declared as known deviations |
-| `n_computed` / `n_reference` | Row counts |
-| `rows_only_computed` | Rows present in output but not in reference |
-| `rows_only_reference` | Rows present in reference but missing from output |
-| `rows_differing` | Rows present in both but with column-level differences |
-| `deviation_explained_rows` | Rows accounted for by known deviations |
+| `passed` | `True` when all diffs are within tolerance or explained by known deviations |
+| `rows_total` | Rows matched (inner join) and compared |
+| `n_computed` / `n_reference` | Row counts on each side before the join |
+| `rows_only_computed` | Keys present in output but not in reference |
+| `rows_only_reference` | Keys present in reference but missing from output |
+| `rows_differing` | Matched rows with a column-level difference |
+| `deviation_explained_rows` | Differing rows fully accounted for by known deviations |
 
 ## Tolerance and deviations
 
-Numeric columns are compared with a configurable tolerance (default `1e-4`).
-Known permanent divergences from the reference implementation are declared in
-`ValidationReport.deviations` and excluded from the pass/fail decision.
+Numeric columns compare exactly by default (`compare_dataframes(tolerance=...)` loosens
+it). Known permanent divergences from the SQL reference live in `bikescore.deviations`
+(`KNOWN_DEVIATIONS`) and are excluded from the pass/fail decision when passed in.
 
-See [Differences from brokenspoke-analyzer](../how-it-works/deviations.md) for
-the full list of accepted deviations and the reasoning behind each one.
+See [Differences from brokenspoke-analyzer](../how-it-works/deviations.md) for the full
+list of accepted deviations and the reasoning behind each one.

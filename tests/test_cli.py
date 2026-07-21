@@ -211,3 +211,31 @@ def test_acquire_default_out_dir_is_city_datasets(
     result = runner.invoke(app, ["acquire", str(tmp_path)])
     assert result.exit_code == 0
     assert seen["out_dir"] == tmp_path / "datasets"
+
+
+# ── validate ──────────────────────────────────────────────────────────────────
+
+
+def test_validate_missing_reference_exits_2(tmp_path: Path) -> None:
+    (tmp_path / "city.toml").write_text(
+        'name = "A"\nslug = "a"\nregion = "Colorado"\n'
+        'country = "united states"\nfips_code = "0803620"\n'
+    )
+    result = runner.invoke(
+        app, ["validate", str(tmp_path), "--reference", str(tmp_path / "no-such-ref")]
+    )
+    assert result.exit_code == 2
+
+
+@pytest.mark.skipif(
+    not (_WORKSPACE / "city.toml").exists() or not (_WORKSPACE / "datasets").is_dir(),
+    reason="Aspen workspace (city.toml + datasets/) absent",
+)
+def test_validate_stress_matches_oracle() -> None:
+    result = runner.invoke(
+        app,
+        ["validate", str(_WORKSPACE), "--reference", str(ORACLE), "--stage", "stress"],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "PASS" in result.stdout
+    assert "FAIL" not in result.stdout

@@ -127,6 +127,26 @@ include each.
 $ bikescore-score export-list
 ```
 
+## `validate`
+
+Score a city and compare each stage output against a reference directory (the
+`<stage>/<file>.parquet` layout of `tests/oracle/aspen` or a brokenspoke-analyzer
+export). Prints a per-stage pass/fail table and exits non-zero if any stage differs.
+
+```console
+$ bikescore-score validate <city> --reference tests/oracle/aspen [--stage stress]
+```
+
+| option | default | meaning |
+|---|---|---|
+| `--reference`, `-r` | *(required)* | reference dir with `<stage>/<file>.parquet` |
+| `--stage` | all | validate only this stage (faster partial run) |
+| `--datasets` | `<city>/datasets` | directory holding the raw inputs |
+| `--scenario`, `-s` / `--set` / `--set-file` | `default` | config, as for `score` |
+| `--strict` | off | treat known SQL deviations as differences |
+
+See [Validation](../development/validation.md) for the full workflow.
+
 ## Working with multiple datasets
 
 The scoring core is a **stateless function of explicit inputs** — it remembers nothing
