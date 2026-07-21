@@ -348,23 +348,6 @@ def attribute_from_dict(d: dict) -> Attribute:
     return DecisionAttribute.from_dict(d)
 
 
-def _is_canonical_decision(c: object) -> bool:
-    """True when ``c`` is a canonical Decision dict (``passes`` each carrying a ``table``).
-
-    Distinguishes the form ``Decision.to_yaml`` emits from the terse authored forms
-    (single-pass shorthand or ``passes`` whose bodies hold ``rules`` directly), which
-    ``load_decision`` compiles.
-    """
-    if not isinstance(c, dict):
-        return False
-    passes = c.get("passes")
-    return (
-        isinstance(passes, list)
-        and len(passes) > 0
-        and all(isinstance(p, dict) and "table" in p for p in passes)
-    )
-
-
 # Standard BNA columns that Attribute names must not shadow
 _RESERVED_COLUMNS = frozenset({
     "road_id", "osm_id", "geometry", "name", "highway", "length_m",

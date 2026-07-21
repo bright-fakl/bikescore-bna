@@ -145,17 +145,6 @@ class AcquireConfig:
     force_download: bool = False
 
 
-# ── SHA256 ───────────────────────────────────────────────────────────────────
-
-def _sha256_file(path: Path) -> str:
-    """Full hex SHA256 of file contents."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 # ── Boundary ─────────────────────────────────────────────────────────────────
 
 def _fetch_boundary_census(city: CityIdentity, tmp_dir: Path) -> Path:

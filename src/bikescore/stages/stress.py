@@ -56,17 +56,6 @@ _CROSSING_NO_TERT = frozenset({"motorway", "trunk", "primary", "secondary"})
 
 
 
-# ── Segment stress: public helpers (used directly by unit tests) ──────────────
-
-def _compute_segment_stress(df: pd.DataFrame, adj_fc: pd.Series) -> pd.DataFrame:
-    """Compute ft_seg_stress and tf_seg_stress using the default segment rules.
-
-    Called directly by unit tests; compute_stress() uses config.stress.segment_rules.
-    """
-    from bikescore.rules.stress_segment import default_segment_stress_rules
-    return _apply_segment_rules(df, adj_fc, default_segment_stress_rules())
-
-
 def _apply_segment_rules(
     df: pd.DataFrame,
     adj_fc: pd.Series,
@@ -94,22 +83,6 @@ def _apply_one_way_reset(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[one_way == "tf", "ft_seg_stress"] = np.nan
     df.loc[one_way == "ft", "tf_seg_stress"] = np.nan
     return df
-
-
-# ── Intersection stress: public helper (used by unit tests) ──────────────────
-
-def _compute_intersection_stress(
-    df: pd.DataFrame,
-    adj_fc: pd.Series,
-    nodes_df: pd.DataFrame,
-    node_key: str = "osm_id",
-) -> pd.DataFrame:
-    """Compute ft_int_stress and tf_int_stress using the default intersection rules.
-
-    Thin wrapper used by unit tests. compute_stress() uses config.stress.intersection_rules.
-    """
-    from bikescore.rules.stress_intersection import default_intersection_stress_rules
-    return _apply_intersection_rules(df, adj_fc, nodes_df, default_intersection_stress_rules(), node_key)
 
 
 def _apply_intersection_rules(
