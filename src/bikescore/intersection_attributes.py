@@ -131,10 +131,3 @@ def default_intersection_attributes() -> list[IntersectionAttribute]:
     ]
 
 
-def referenced_node_tags(attributes: list[IntersectionAttribute]) -> set[str]:
-    """Union of OSM node tags read by all enabled attributes (dynamic parse set)."""
-    out: set[str] = set()
-    for a in attributes:
-        if a.enabled:
-            out |= a.referenced_tags()
-    return out

@@ -317,7 +317,6 @@ def _merge_intersection_attributes(attrs: list, entries: list) -> list:
 
 def _apply_layer(
     config: BNAConfig, layer: dict | None, provenance: dict[str, str], label: str,
-    project_root: Path | None = None,
 ) -> None:
     for namespace, entries in (layer or {}).items():
         if namespace == "description":
@@ -326,11 +325,11 @@ def _apply_layer(
             from bikescore.destinations import DestinationRegistry
 
             if isinstance(entries, str):
-                if project_root is None:
-                    raise ConfigResolverError(
-                        "Cannot resolve catalog reference without project_root."
-                    )
-                config.destinations = DestinationRegistry.from_catalog(entries, project_root)
+                raise ConfigResolverError(
+                    f"Destination catalog reference by name ({entries!r}) is not "
+                    "resolvable in the scoring core — inline the destination list in "
+                    "the scenario. Catalog libraries are an orchestration-layer feature."
+                )
             elif isinstance(entries, dict) and entries.get("replace") is True:
                 types_raw = entries.get("types", [])
                 config.destinations = DestinationRegistry.from_dict({"destinations": types_raw})
@@ -522,9 +521,7 @@ def _load_default_ruleset_doc(ruleset_name: str) -> dict:
 # re-adds workspace resolution on top of ``_config_from_meta``.
 
 
-def _config_from_meta(
-    meta: dict, label: str, project_root: Path | None = None
-) -> BNAConfig:
+def _config_from_meta(meta: dict, label: str) -> BNAConfig:
     """Deserialize one scenario document (``meta``) into a ``BNAConfig``.
 
     ``type: complete`` → self-contained source: structural namespaces are cleared and
@@ -537,14 +534,14 @@ def _config_from_meta(
     config = BNAConfig.with_defaults()
     if scenario_type == "complete":
         _clear_structural(config)
-        _apply_layer(config, meta.get("config", {}) or {}, {}, label, project_root)
+        _apply_layer(config, meta.get("config", {}) or {}, {}, label)
         _apply_rule_sets(config, meta.get("rule_sets", {}) or {}, label)
     else:
         layer = {
             k: v for k, v in meta.items()
             if k not in ("description", "type", "version", "base")
         }
-        _apply_layer(config, layer, {}, label, project_root)
+        _apply_layer(config, layer, {}, label)
     return config
 
 
@@ -590,7 +587,7 @@ def build_config(
             name (e.g. ``"default"``, ``"name@2"``); an inline scenario ``dict``; or a
             ``Path`` to a scenario YAML file.
         overrides: optional ``{dotted_key: value}`` scalar one-offs (``--set`` form),
-            applied last (e.g. ``{"imputation.city_default_speed": 40}``).
+            applied last (e.g. ``{"city.default_speed": 40}``).
 
     Returns:
         The resolved ``BNAConfig`` — no workspace, no provenance, no city layering.

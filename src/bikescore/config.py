@@ -2,25 +2,10 @@
 
 from __future__ import annotations
 
-try:
-    import tomllib  # Python 3.11+
-except ImportError:
-    import tomli as tomllib  # type: ignore[no-redef]
 import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-
-def load_toml(path: Path | str) -> dict:
-    """Load a TOML file. Uses stdlib tomllib (3.11+) or the tomli fallback."""
-    with open(path, "rb") as f:
-        return tomllib.load(f)
-
-
-def parse_toml_text(text: str) -> dict:
-    """Parse a TOML string. Useful for validation without writing a file."""
-    return tomllib.loads(text)
 
 if TYPE_CHECKING:
     pass
@@ -279,19 +264,6 @@ class ExportConfig:
 
     base_dir: Path = field(default_factory=lambda: Path("./results"))
     """Root directory for calver-versioned output: base_dir/country/region/city/YY.MM/"""
-
-
-def apply_project_export_dir(config: BNAConfig, project_dir: Path) -> BNAConfig:
-    """Return a copy of config with export.base_dir set to {project_dir}/exports/ if the
-    caller left the default.  Both CLI and web call this so the override lives in one place.
-    """
-    import dataclasses
-    if config.export.base_dir == ExportConfig().base_dir:
-        return dataclasses.replace(
-            config,
-            export=dataclasses.replace(config.export, base_dir=project_dir / "exports"),
-        )
-    return config
 
 
 @dataclass

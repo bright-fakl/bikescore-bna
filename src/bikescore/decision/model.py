@@ -714,12 +714,6 @@ class Decision:
 
         return yaml.dump(self.to_dict(), sort_keys=False, allow_unicode=True)
 
-    def save_yaml(self, path: Any) -> None:
-        from pathlib import Path
-
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.to_yaml(), encoding="utf-8")
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any]) -> Decision:
@@ -727,19 +721,6 @@ class Decision:
             name=d.get("name", ""),
             passes=[Pass.from_dict(p) for p in d.get("passes", [])],
         )
-
-    @classmethod
-    def from_yaml(cls, source: Any) -> Decision:
-        from pathlib import Path
-
-        import yaml
-
-        text = source
-        if isinstance(source, Path) or (
-            isinstance(source, str) and "\n" not in source and Path(source).exists()
-        ):
-            text = Path(source).read_text(encoding="utf-8")
-        return cls.from_dict(yaml.safe_load(text) or {})
 
 
 # ── Matcher (row-level any-of-rows) ──────────────────────────────────────────
@@ -778,8 +759,6 @@ class Matcher:
     def matches(self, tags: Mapping[str, Any]) -> bool:
         return any(r.matches(tags) for r in self.rows)
 
-    def matches_primary(self, tags: Mapping[str, Any]) -> bool:
-        return bool(self.rows) and self.rows[0].matches(tags)
 
     def referenced_fields(self) -> set[str]:
         out: set[str] = set()

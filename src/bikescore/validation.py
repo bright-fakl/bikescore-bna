@@ -510,13 +510,6 @@ class ValidationReport:
 
         return "\n".join(lines)
 
-    def save_markdown(self, path: Path | str) -> Path:
-        """Write the full Markdown report to *path*. Returns the resolved path."""
-        out = Path(path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(self.format_markdown(), encoding="utf-8")
-        return out
-
 
 class Reference:
     """Loads brokenspoke-analyzer reference parquets for a city.
@@ -541,13 +534,6 @@ class Reference:
                 )
             self._cache[filename] = pd.read_parquet(parquet_path)
         return self._cache[filename]
-
-    def available_stages(self) -> list[str]:
-        """Return names of available reference parquet files."""
-        stages_dir = self.path / "stages"
-        if not stages_dir.exists():
-            return []
-        return [f.stem for f in stages_dir.glob("*.parquet")]
 
 
 def _scalar(v: Any) -> Any:
@@ -867,7 +853,6 @@ def compare_dataframes(
     )
 
 
-
 def _annotate_link_report(
     report: ValidationReport,
     way_attrs: pd.DataFrame,
@@ -1059,183 +1044,6 @@ def _annotate_link_report(
     )
 
 
-def validate_destinations(
-    computed: dict[str, pd.DataFrame],
-    reference: Reference,
-    city: str,
-    dest_names: list[str],
-) -> list[ValidationReport]:
-    """Compare compute_destinations output against reference destination parquets.
-
-    For each destination type, produces a ValidationReport with:
-      - cluster count comparison (n_computed vs n_reference)
-      - geom_pt_dist_m: distance in metres from each live centroid to the nearest
-        reference centroid (after KDTree matching)
-      - blockid20_jaccard: set-similarity of block associations for matched pairs
-        (1.0 = perfect match, 0.0 = no overlap)
-
-    Args:
-        computed: dict mapping destination type name → DataFrame from compute_destinations().
-        reference: Reference parquet loader.
-        city: City slug for reporting.
-        dest_names: Destination type names to validate (names without 'destinations_' prefix).
-
-    Returns:
-        One ValidationReport per destination type that has a reference parquet.
-    """
-    import time
-
-    import numpy as np
-    from shapely import wkb as shapely_wkb
-
-    reports: list[ValidationReport] = []
-
-    for name in dest_names:
-        t0 = time.monotonic()
-        try:
-            ref_df = reference.load(f"destinations_{name}.parquet")
-        except (FileNotFoundError, Exception):
-            continue
-
-        live_df = computed.get(name, pd.DataFrame())
-        n_computed = len(live_df)
-        n_reference = len(ref_df)
-
-        column_diffs: dict[str, ColumnDiff] = {}
-        rows_differing = 0
-        notes: list[str] = []
-
-        n_match = min(n_computed, n_reference)
-
-        if n_match > 0 and not live_df.empty and "geom_pt" in ref_df.columns and "geom_pt" in live_df.columns:
-            # Parse reference geom_pt from EWKB hex strings (SRID 32618 embedded).
-            ref_pts = []
-            for val in ref_df["geom_pt"]:
-                if val is None or (isinstance(val, float) and np.isnan(val)):
-                    ref_pts.append(None)
-                else:
-                    try:
-                        ref_pts.append(shapely_wkb.loads(bytes.fromhex(str(val))))
-                    except Exception:
-                        ref_pts.append(None)
-
-            # Live geom_pt are shapely Points already.
-            live_pts = list(live_df["geom_pt"])
-
-            ref_coords = np.array(
-                [(p.x, p.y) for p in ref_pts if p is not None],
-                dtype=float,
-            )
-            live_coords = np.array(
-                [(p.x, p.y) if p is not None else (np.nan, np.nan)
-                 for p in live_pts],
-                dtype=float,
-            )
-
-            if len(ref_coords) > 0 and len(live_coords) > 0:
-                from scipy.spatial import KDTree
-
-                tree = KDTree(ref_coords)
-                valid_mask = ~np.isnan(live_coords[:, 0])
-                dists = np.full(len(live_coords), np.nan)
-                matched_ref_idx = np.full(len(live_coords), -1, dtype=int)
-
-                if valid_mask.any():
-                    d, idx = tree.query(live_coords[valid_mask])
-                    dists[valid_mask] = d
-                    matched_ref_idx[valid_mask] = idx
-
-                valid_dists = dists[~np.isnan(dists)]
-                n_far = int((valid_dists > 10.0).sum()) if len(valid_dists) > 0 else 0
-                max_dist = float(valid_dists.max()) if len(valid_dists) > 0 else 0.0
-                mean_dist = float(valid_dists.mean()) if len(valid_dists) > 0 else 0.0
-
-                column_diffs["geom_pt_dist_m"] = ColumnDiff(
-                    column="geom_pt_dist_m",
-                    n_total=n_computed,
-                    n_differ=n_far,
-                    max_diff=max_dist,
-                    mean_diff=mean_dist,
-                    examples=[],
-                )
-
-                # Block association Jaccard for matched pairs.
-                # Jaccard = |live_blocks ∩ ref_blocks| / |live_blocks ∪ ref_blocks|.
-                # 1.0 = identical block assignments; 0.0 = no blocks in common.
-                # Normalize both sides to zero-padded 15-char strings to handle
-                # parquet int vs str storage differences.
-                if "blockid20" in live_df.columns and "blockid20" in ref_df.columns:
-                    ref_blocks_list = list(ref_df["blockid20"])
-                    live_blocks_list = list(live_df["blockid20"])
-
-                    def _norm_blocks(val: object) -> set:
-                        if val is None:
-                            return set()
-                        items = list(val) if hasattr(val, "__iter__") and not isinstance(val, str) else []
-                        return {str(b).zfill(15) for b in items}
-
-                    jaccards: list[float] = []
-                    n_live_empty = 0
-                    for li, ri in enumerate(matched_ref_idx):
-                        if ri < 0:
-                            continue
-                        live_set = _norm_blocks(live_blocks_list[li])
-                        ref_set = _norm_blocks(ref_blocks_list[ri])
-                        if not live_set:
-                            n_live_empty += 1
-                        if not live_set and not ref_set:
-                            jaccards.append(1.0)
-                        elif not live_set or not ref_set:
-                            jaccards.append(0.0)
-                        else:
-                            jaccards.append(len(live_set & ref_set) / len(live_set | ref_set))
-
-                    if jaccards:
-                        min_jac = min(jaccards)
-                        mean_jac = sum(jaccards) / len(jaccards)
-                        n_imperfect = sum(1 for j in jaccards if j < 1.0)
-                        rows_differing = n_imperfect
-                        column_diffs["blockid20_jaccard"] = ColumnDiff(
-                            column="blockid20_jaccard",
-                            n_total=len(jaccards),
-                            n_differ=n_imperfect,
-                            max_diff=float(1.0 - min_jac),
-                            mean_diff=float(1.0 - mean_jac),
-                            examples=[],
-                        )
-                        if n_live_empty == len(jaccards):
-                            notes.append(
-                                f"All {n_live_empty} computed clusters have empty blockid20 lists. "
-                                f"The block-association spatial join likely failed (CRS mismatch or "
-                                f"census blocks not loaded). Check compute_destinations inputs."
-                            )
-                        elif n_imperfect > 0:
-                            notes.append(
-                                f"{n_imperfect}/{len(jaccards)} clusters have imperfect block "
-                                f"associations (min Jaccard={min_jac:.3f}, mean={mean_jac:.3f}). "
-                                f"blockid20_jaccard measures block-assignment overlap: 1.0=exact, "
-                                f"0.0=no common blocks. Edge clusters near the city boundary may "
-                                f"legitimately differ by 1 block."
-                            )
-
-        report = ValidationReport(
-            stage=f"destinations/{name}",
-            city=city,
-            n_computed=n_computed,
-            n_reference=n_reference,
-            rows_total=n_match,
-            rows_differing=rows_differing,
-            rows_only_computed=max(0, n_computed - n_reference),
-            rows_only_reference=max(0, n_reference - n_computed),
-            column_diffs=column_diffs,
-            report_notes=notes,
-            wall_time_seconds=time.monotonic() - t0,
-        )
-        reports.append(report)
-
-    return reports
-
-
 def validate_graph(
     computed_verts: pd.DataFrame,
     computed_links: pd.DataFrame,
@@ -1380,65 +1188,3 @@ def validate_graph(
     return verts_report, links_report
 
 
-def validate_way_lengths(
-    computed_segments: pd.DataFrame,
-    ref_ways: pd.DataFrame,
-    city: str,
-    length_tolerance_m: float = 1.0,
-) -> ValidationReport:
-    """Compare total length per osm_id between bna-core and the reference.
-
-    bna-core uses full OSM way geometries (via osmium complete_ways), while
-    brokenspoke-analyzer feeds osm2pgrouting from an osmconvert bbox-clipped
-    file that drops out-of-bbox nodes, effectively truncating road geometries
-    at the city bounding box.  Any significant length mismatch indicates a road
-    whose geometry extends far outside the city — the long out-of-boundary
-    portion produces unrealistically high link costs and cuts off connectivity
-    for adjacent blocks.
-
-    Args:
-        computed_segments: bna-core stressed segments GeoDataFrame (projected CRS).
-            Must have columns ``osm_id`` and a projected geometry column.
-        ref_ways: reference ways_raw.parquet with columns ``osm_id`` and
-            ``length_m`` (per-segment length in metres).
-        city: city slug for the report.
-        length_tolerance_m: differences ≤ this value (metres) are ignored.
-
-    Returns:
-        ValidationReport with stage ``"graph/lengths"``.
-        Rows that appear in both sides but differ beyond the tolerance are
-        reported as ``row_diffs``.  Rows only in computed / reference are
-        reported in the usual absence fields.
-    """
-
-    # Aggregate bna-core: total geometry length per osm_id (projected CRS = metres)
-    if hasattr(computed_segments, "geometry"):
-        comp_len = (
-            computed_segments.assign(_len=computed_segments.geometry.length)
-            .groupby("osm_id", as_index=False)["_len"]
-            .sum()
-            .rename(columns={"_len": "length_m"})
-        )
-    else:
-        comp_len = (
-            computed_segments.groupby("osm_id", as_index=False)["length_m"].sum()
-        )
-    comp_len["osm_id"] = comp_len["osm_id"].astype(np.int64)
-
-    # Aggregate reference: total length_m per osm_id
-    ref_len = (
-        ref_ways[ref_ways["length_m"].notna()]
-        .groupby("osm_id", as_index=False)["length_m"]
-        .sum()
-    )
-    ref_len["osm_id"] = ref_len["osm_id"].astype(np.int64)
-
-    return compare_dataframes(
-        comp_len,
-        ref_len,
-        stage="graph/lengths",
-        city=city,
-        key_col="osm_id",
-        columns=["length_m"],
-        tolerance=length_tolerance_m,
-    )

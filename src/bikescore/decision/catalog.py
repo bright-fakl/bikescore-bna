@@ -56,9 +56,6 @@ class FieldCatalog:
         spec = self.fields.get(name)
         return spec.provider if spec and spec.kind == "derived" else None
 
-    def is_known(self, name: str) -> bool:
-        return name in self.fields
-
 
 # ── Provider registry ─────────────────────────────────────────────────────────
 

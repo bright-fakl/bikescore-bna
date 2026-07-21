@@ -26,7 +26,7 @@ from bikescore.export import (
     list_export_targets,
 )
 from bikescore.pipeline import PIPELINE, ScoreResult, score_city
-from bikescore.scenarios import list_bundled_scenarios
+from bikescore.scenarios import get_bundled_scenario, list_bundled_scenarios
 from bikescore.stage import StageSpec, run_stage
 
 __all__ = [
@@ -40,6 +40,7 @@ __all__ = [
     "__version__",
     "acquire_city",
     "build_config",
+    "get_bundled_scenario",
     "export_bundle",
     "export_target",
     "list_bundled_scenarios",

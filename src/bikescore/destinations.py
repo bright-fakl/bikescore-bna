@@ -10,10 +10,7 @@ where its points are always included, even inside polygon clusters).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
-
-import yaml
 
 from bikescore.decision import Clause, Matcher, MatchRow
 
@@ -52,15 +49,6 @@ _CLUSTERING_MAP: dict[str, tuple[str, int]] = {
     "retail": ("retail", 50),
     "transit": ("transit", 75),
 }
-
-
-def _catalog_search_paths(project_root: Path, city_dir: Path | None = None) -> list[Path]:
-    paths: list[Path] = []
-    if city_dir is not None:
-        paths.append(Path(city_dir) / "destinations")
-    paths.append(Path(project_root) / "destinations")
-    paths.append(Path(__file__).parent / "data" / "destinations")
-    return paths
 
 
 def _catalog_type_from_compact(d: dict) -> DestinationType:
@@ -108,7 +96,6 @@ def _catalog_type_from_compact(d: dict) -> DestinationType:
         enabled=d.get("enabled", True),
         score_id=d.get("score_id", ""),
     )
-
 
 
 @dataclass
@@ -281,8 +268,6 @@ class DestinationType:
         }
 
 
-
-
 class DestinationRegistry:
     """Manages the set of active destination types.
 
@@ -413,43 +398,6 @@ class DestinationRegistry:
             items = list(raw or [])
         return cls([_destination_type_from_dict(d) for d in items])
 
-    @classmethod
-    def from_yaml(cls, source: str | Path) -> DestinationRegistry:
-        """Load a registry from a YAML string or file path produced by ``to_yaml``."""
-        import yaml
-
-        text = source
-        if isinstance(source, Path) or (isinstance(source, str) and "\n" not in source
-                                        and Path(source).exists()):
-            text = Path(source).read_text(encoding="utf-8")
-        return cls.from_dict(yaml.safe_load(text) or {})
-
-    @classmethod
-    def from_catalog(
-        cls, name: str, project_root: Path, city_dir: Path | None = None
-    ) -> DestinationRegistry:
-        """Load a named catalog YAML file. Sets ``_source_name``."""
-        search = _catalog_search_paths(project_root, city_dir)
-        for directory in search:
-            candidate = directory / f"{name}.yaml"
-            if candidate.exists():
-                raw = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
-                items = raw.get("destinations", [])
-                types = [_catalog_type_from_compact(d) for d in items]
-                reg = cls(types)
-                reg._source_name = name
-                return reg
-        valid = [
-            p.stem
-            for d in search
-            if d.exists()
-            for p in sorted(d.glob("*.yaml"))
-        ]
-        raise ValueError(
-            f"Destination catalog {name!r} not found. "
-            f"Searched: {[str(p) for p in search]}. "
-            f"Available: {sorted(set(valid))}"
-        )
 
     def __len__(self) -> int:
         return len(self._types)
@@ -852,57 +800,6 @@ def _compact_dict_from_type(dt: DestinationType) -> dict:
 _CATALOG_SOURCES = ("city", "project", "bundled")
 
 
-def catalog_source(
-    project_root: Path, name: str, city_dir: Path | None = None
-) -> str | None:
-    """Return the highest-priority source a catalog ``name`` resolves to, or None.
-
-    Mirrors ``_catalog_search_paths`` ordering: city > project > bundled.
-    """
-    search = _catalog_search_paths(project_root, city_dir)
-    labels = _CATALOG_SOURCES if city_dir is not None else _CATALOG_SOURCES[1:]
-    for directory, source in zip(search, labels):
-        if (directory / f"{name}.yaml").exists():
-            return source
-    return None
-
-
-def _editable_catalog_path(
-    project_root: Path, name: str, city_dir: Path | None
-) -> Path:
-    """Filesystem path for an editable (project- or city-level) catalog."""
-    base = Path(city_dir) if city_dir is not None else Path(project_root)
-    return base / "destinations" / f"{name}.yaml"
-
-
-def load_catalog_for_edit(
-    project_root: Path, name: str, city_dir: Path | None = None
-) -> dict:
-    """Return ``{name, source, editable, description, types: [editor-dict]}``.
-
-    Raises ValueError if the catalog does not exist at any resolution level.
-    """
-    source = catalog_source(project_root, name, city_dir)
-    if source is None:
-        raise ValueError(f"Destination catalog {name!r} not found")
-    reg = DestinationRegistry.from_catalog(name, project_root, city_dir)
-    # The file may carry a free-form description alongside its destinations.
-    description = ""
-    for directory in _catalog_search_paths(project_root, city_dir):
-        candidate = directory / f"{name}.yaml"
-        if candidate.exists():
-            raw = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
-            description = raw.get("description", "") if isinstance(raw, dict) else ""
-            break
-    return {
-        "name": name,
-        "source": source,
-        "editable": source != "bundled",
-        "description": description,
-        "types": [_editor_dict_from_type(t) for t in reg._types.values()],
-    }
-
-
 def _build_types_or_raise(types: list[dict]) -> list[DestinationType]:
     """Reconstruct DestinationTypes from editor/compact dicts, validating each.
 
@@ -924,68 +821,3 @@ def _build_types_or_raise(types: list[dict]) -> list[DestinationType]:
     return built
 
 
-def save_catalog(
-    project_root: Path,
-    name: str,
-    types: list[dict],
-    *,
-    city_dir: Path | None = None,
-    description: str = "",
-    create: bool = False,
-) -> None:
-    """Validate ``types`` and write a project- or city-level catalog YAML.
-
-    ``create=True`` is a POST (must not already exist at the editable level and must
-    not shadow a bundled name silently — see callers); ``create=False`` is a PUT
-    replace of an existing editable catalog. Bundled-source guarding is the caller's
-    responsibility (it owns the 403). Raises ValueError on a bad name or a malformed
-    type/matcher.
-    """
-    if not name or "/" in name or name.endswith(".yaml"):
-        raise ValueError(f"Invalid catalog name {name!r}")
-
-    built = _build_types_or_raise(types)
-    out_path = _editable_catalog_path(project_root, name, city_dir)
-    # A new catalog must have a name that does not already resolve at any level —
-    # this also forbids shadowing a bundled catalog (bundled names are reserved).
-    if create and catalog_source(project_root, name, city_dir) is not None:
-        raise FileExistsError(f"Catalog {name!r} already exists")
-
-    doc: dict[str, Any] = {"name": name}
-    if description:
-        doc["description"] = description
-    doc["destinations"] = [_compact_dict_from_type(dt) for dt in built]
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        yaml.dump(doc, sort_keys=False, allow_unicode=True, default_flow_style=False),
-        encoding="utf-8",
-    )
-
-
-def delete_catalog(
-    project_root: Path, name: str, city_dir: Path | None = None
-) -> None:
-    """Delete a project- or city-level catalog file. Raises ValueError if absent."""
-    out_path = _editable_catalog_path(project_root, name, city_dir)
-    if not out_path.exists():
-        raise ValueError(f"Catalog {name!r} not found at an editable level")
-    out_path.unlink()
-
-
-def scenarios_referencing_catalog(project_root: Path, name: str) -> list[str]:
-    """Names of scenarios whose ``destinations`` field selects catalog ``name``."""
-    from bikescore.scenarios import get_scenario, list_scenarios
-
-    referencing: list[str] = []
-    for s in list_scenarios(project_root):
-        text = get_scenario(project_root, s["name"])
-        if text is None:
-            continue
-        content = yaml.safe_load(text) or {}
-        if not isinstance(content, dict):
-            continue
-        section = content.get("config") if isinstance(content.get("config"), dict) else content
-        if section.get("destinations") == name:
-            referencing.append(s["name"])
-    return referencing
