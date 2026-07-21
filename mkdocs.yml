@@ -30,6 +30,7 @@ nav:
   - Concepts: concepts.md
   - How it works:
       - Overview: how-it-works/index.md
+      - Data acquisition: how-it-works/data-acquisition.md
       - OSM parsing: how-it-works/osm-parsing.md
       - Road attributes: how-it-works/road-features.md
       - Level of Traffic Stress: how-it-works/stress.md
@@ -39,7 +40,6 @@ nav:
       - Scoring: how-it-works/scoring.md
       - Neighborhood scores: how-it-works/neighborhood-scores.md
       - Known deviations: how-it-works/deviations.md
-      - Data acquisition: how-it-works/data-acquisition.md
   - Tutorials:
       - Overview: tutorial/index.md
       - Score a city: tutorial/run-a-city.md
