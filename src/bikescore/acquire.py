@@ -21,6 +21,7 @@ import gzip
 import hashlib
 import json
 import logging
+import os
 import shutil
 import subprocess
 import time
@@ -120,13 +121,27 @@ class PbfMeta(NamedTuple):
     sha256: str
     cached_filename: str = ""
 
+_PBF_CACHE_ENV = "BIKESCORE_PBF_CACHE"
+
+
+def _default_pbf_cache_dir() -> Path:
+    """Default shared regional-PBF cache: ``$BIKESCORE_PBF_CACHE`` or ``~/.bikescore/pbf``.
+
+    The core resolves this itself and never reads the orchestration layer's global
+    settings file. Callers relocate the cache by passing ``pbf_cache_dir=`` (to
+    :func:`acquire_city`) or setting the env var.
+    """
+    env = os.environ.get(_PBF_CACHE_ENV)
+    return Path(env).expanduser() if env else Path.home() / ".bikescore" / "pbf"
+
+
 
 @dataclass
 class AcquireConfig:
     """Where acquisition reads/writes: the per-city output pool and the shared PBF cache."""
 
     project_data_dir: Path = field(default_factory=lambda: Path("./data"))
-    pbf_cache_dir: Path = field(default_factory=lambda: Path.home() / ".bikescore" / "pbf")
+    pbf_cache_dir: Path = field(default_factory=_default_pbf_cache_dir)
     force_download: bool = False
 
 
@@ -471,9 +486,7 @@ class UsCensusLodesProvider:
         self._pbf_cache_dir = pbf_cache_dir
 
     def _config(self, out_dir: Path, force: bool) -> AcquireConfig:
-        from bikescore.settings import default_pbf_cache_dir
-
-        cache = self._pbf_cache_dir if self._pbf_cache_dir is not None else default_pbf_cache_dir()
+        cache = self._pbf_cache_dir if self._pbf_cache_dir is not None else _default_pbf_cache_dir()
         return AcquireConfig(
             project_data_dir=out_dir, pbf_cache_dir=cache, force_download=force,
         )

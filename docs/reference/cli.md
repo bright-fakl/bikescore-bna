@@ -7,9 +7,8 @@ The core ships one console script, `bikescore-score`, a thin shell over the
 $ bikescore-score --help
 ```
 
-`<city>` in every command resolves to a directory containing a `city.toml`, given either
-as a **path** to that directory or as a **slug** looked up under the global settings
-`project_root`.
+`<city>` in every command is a **path** to a directory containing a `city.toml`. Slug
+lookup against a multi-city project store lives in bikescore-app, not the core CLI.
 
 ## `score`
 

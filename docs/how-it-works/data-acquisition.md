@@ -33,6 +33,11 @@ clips it to each city boundary. A second city in the same state reuses the cache
 download. Each cached PBF carries a `.meta.json` sidecar recording its source URL,
 timestamp, size, and checksum; a re-acquire is a cache hit unless you pass `force=True`.
 
+Relocate the cache by passing `pbf_cache_dir=` to `acquire_city` or setting the
+`BIKESCORE_PBF_CACHE` environment variable. The core resolves this default itself and
+does not read any global settings file — cache placement is the orchestration layer's
+job to configure when it drives acquisition.
+
 ## Clipping
 
 The regional PBF is trimmed to the city boundary before parsing. When the `osmium`

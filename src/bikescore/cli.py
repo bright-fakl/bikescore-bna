@@ -7,11 +7,10 @@ Three commands, each a thin shell over the library (``build_config`` / ``acquire
     bikescore-score acquire  <city> [--out-dir ./data]
     bikescore-score scenarios
 
-``<city>`` resolves to a directory containing ``city.toml``: either a path to that
-directory, or a slug looked up under the global settings ``project_root``. Raw inputs
-are read from ``<city>/datasets/`` (the ``acquire`` output layout) unless ``--datasets``
-overrides. This CLI is the app-free entry point; the full multi-city / web CLI lives in
-bikescore-app.
+``<city>`` is a path to a directory containing ``city.toml``. Raw inputs are read from
+``<city>/datasets/`` (the ``acquire`` output layout) unless ``--datasets`` overrides.
+This CLI is the app-free entry point; slug lookup, the multi-city project store, and
+the web CLI all live in bikescore-app.
 """
 
 from __future__ import annotations
@@ -52,20 +51,15 @@ _INPUT_GLOBS = {
 
 
 def _resolve_city_dir(city: str) -> Path:
-    """Resolve *city* (a path to a city dir, or a settings slug) to its directory."""
+    """Resolve *city* (a path to a directory containing ``city.toml``) to its directory."""
     p = Path(city)
     if (p / "city.toml").exists():
         return p
-    from bikescore.settings import get_city_dir
-
-    try:
-        return get_city_dir(city)
-    except FileNotFoundError as exc:
-        _err.print(
-            f"[red]City not found:[/red] {city!r} is neither a directory with city.toml "
-            f"nor a known slug under the settings project_root."
-        )
-        raise typer.Exit(2) from exc
+    _err.print(
+        f"[red]City not found:[/red] {city!r} is not a directory containing city.toml. "
+        f"Pass a path to a city directory (slug lookup lives in bikescore-app)."
+    )
+    raise typer.Exit(2)
 
 
 def _load_identity(city_dir: Path) -> CityIdentity:
@@ -131,7 +125,7 @@ def _scenario_arg(scenario: str | None) -> str | Path | None:
 
 @app.command()
 def score(
-    city: Annotated[str, typer.Argument(help="City directory (with city.toml) or slug.")],
+    city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
     scenario: Annotated[
         str | None,
         typer.Option("--scenario", "-s", help="Bundled scenario name or path to a YAML file."),
@@ -177,7 +171,7 @@ def score(
 
 @app.command()
 def acquire(
-    city: Annotated[str, typer.Argument(help="City directory (with city.toml) or slug.")],
+    city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
     out_dir: Annotated[
         Path, typer.Option("--out-dir", help="Directory to write inputs into."),
     ] = Path("./data"),
@@ -206,7 +200,7 @@ def scenarios() -> None:
 
 @app.command("export")
 def export_cmd(
-    city: Annotated[str, typer.Argument(help="City directory (with city.toml) or slug.")],
+    city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
     target: Annotated[
         str | None,
         typer.Option("--target", "-t", help="Single export target (see `export-list`)."),
