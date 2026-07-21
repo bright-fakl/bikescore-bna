@@ -34,9 +34,9 @@ download. Each cached PBF carries a `.meta.json` sidecar recording its source UR
 timestamp, size, and checksum; a re-acquire is a cache hit unless you pass `force=True`.
 
 Relocate the cache by passing `pbf_cache_dir=` to `acquire_city` or setting the
-`BIKESCORE_PBF_CACHE` environment variable. The core resolves this default itself and
-does not read any global settings file — cache placement is the orchestration layer's
-job to configure when it drives acquisition.
+`BIKESCORE_PBF_CACHE` environment variable. `bikescore` resolves this default itself and
+does not read any global settings file — cache placement is left to the caller (or to
+whatever tool drives acquisition).
 
 ## Clipping
 
@@ -59,7 +59,7 @@ class InputProvider(Protocol):
 acquire_city(city, "./data", provider=MyProvider())
 ```
 
-The orchestrator treats the input names as opaque; the provider is what gives them
+The pipeline treats the input names as opaque keys; the provider is what gives them
 meaning. This is the plug point for non-US data or a prebuilt network.
 
 ## Reproducibility

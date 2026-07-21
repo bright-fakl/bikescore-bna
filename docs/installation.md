@@ -16,8 +16,8 @@ $ uv add bikescore
 
 This pulls the scientific stack it depends on (GeoPandas, Shapely, pyproj, SciPy,
 NumPy, pandas/polars, PyArrow) plus `pygris` (US census geometry) and `requests`
-(data acquisition). The library carries **no** web or database dependencies — those
-belong to the separate `bikescore-app` orchestration layer.
+(data acquisition). The library carries **no** web or database dependencies — it runs
+entirely in-process.
 
 ## Optional: the `osmium` binary (recommended)
 

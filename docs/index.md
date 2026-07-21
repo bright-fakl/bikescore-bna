@@ -1,11 +1,13 @@
 # bikescore
 
-**Single-city bicycle network analysis as a database-free Python library.**
+**Single-city bicycle network analysis as a Python library.**
 
 `bikescore` computes the [PeopleForBikes Bicycle Network Analysis](https://bikeleague.org)
 scores — Level of Traffic Stress, low-stress connectivity, and access to destinations —
-for one city, from a plain set of input files. No database, no workspace, no web server:
-just `inputs → config → scores`.
+for one city, from a plain set of input files. It is a pure-Python port of the
+PeopleForBikes [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
+(the original SQL/PostGIS implementation) that runs without a database — see
+[Why bikescore](why-bikescore.md) for the motivation and how the two differ.
 
 ```python
 from bikescore import acquire_city, build_config, score_city, CityIdentity
@@ -34,16 +36,18 @@ $ bikescore-score score   ./aspen-colorado --scenario default --out scores.parqu
 - **`neighborhood.parquet`** — the 0–100 city-level ratings (overall + per category).
 - Intermediate stage outputs (network, LTS segments, destinations, …) for inspection.
 
-## Where it fits
+## How it's built
 
-`bikescore` is the **scoring core**. Multi-city workspaces, content-addressed run
-caching, dataset versioning, and the web UI live in the separate **bikescore-app**
-orchestration layer, which drives this library through a small stage contract. The
-core never depends on the app — see [Concepts](concepts.md) and
-[Extensibility](reference/extensibility.md).
+`bikescore` is a pure function: input files in, a config, scores out. It runs the
+eleven-stage pipeline in-process with no database, no server, and no persistent state —
+each stage reads files from its upstream stages and writes files of its own. The stages
+are exposed through a small, generic contract so a larger tool can drive them with
+caching, run history, or a UI, without `bikescore` ever depending on that tool. See
+[Concepts](concepts.md) and [Extensibility](reference/extensibility.md).
 
 ## Next steps
 
+- [Why bikescore](why-bikescore.md) — the motivation and differences from brokenspoke-analyzer.
 - [Installation](installation.md) — install the package and the optional `osmium` binary.
 - [Score a city](tutorial/run-a-city.md) — the end-to-end tutorial.
 - [How it works](how-it-works/index.md) — the pipeline, stage by stage.

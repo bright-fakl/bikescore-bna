@@ -1,8 +1,9 @@
 # Contributing
 
-`bikescore` is the scoring **core**: a database-free library that computes stress and
-access scores for one city. The orchestration layer (multi-city workspaces,
-content-addressed runs, web UI, full CLI) lives separately in `bikescore-app`.
+`bikescore` is a database-free library that computes stress and access scores for one
+city. It stays a pure `(inputs, config) → files` function; anything stateful built on top
+of it — multi-city stores, run caching, a web UI — lives outside the library and is not
+part of this repo.
 
 ## Dev setup
 
@@ -32,26 +33,27 @@ $ uv run pytest -m integration     # needs local cached input data
 
 ## The one load-bearing rule: import direction
 
-**The core must never import from `bikescore_app`.** The dependency direction is
-app → core, one-way — content-addressed reuse, the run store, and the web UI all depend on
-the core staying free of them. `tests/test_import_guard.py` scans every source and test
-file statically and fails on any `bikescore_app` import, so the rule holds even when the
-app package isn't installed. A violation is an architecture regression, not a style nit.
+**`bikescore` must never depend on anything built on top of it.** The dependency direction
+is one-way, into the library — any caching layer, run store, or web UI is a consumer of
+`bikescore`, never the reverse. `tests/test_import_guard.py` scans every source and test
+file statically and fails on any import of such an orchestration layer, so the rule holds
+even when that layer isn't installed. A violation is an architecture regression, not a
+style nit.
 
-Corollaries the core keeps to:
+Corollaries `bikescore` keeps to:
 
-- **No database, workspace, or web dependencies** in core. Stages take file paths in and
-  write files out; there is no run store to reach for.
+- **No database, workspace, or web dependencies.** Stages take file paths in and write
+  files out; there is no run store to reach for.
 - **Rules are data, not code.** Stress, attribute, and destination logic lives in decision
   tables carried by scenarios (see [Extensibility](../reference/extensibility.md)), not in Python
   branches.
-- **The stage metadata stays co-located.** `version` and the config-slice look unused in
-  core but are the app's cache-buster and invalidation key — leave them with the stage
-  that owns them (an access-audit test keeps this honest).
+- **The stage metadata stays co-located.** `version` and the config-slice look unused
+  here but are the cache-buster and invalidation key a caching layer relies on — leave them
+  with the stage that owns them (an access-audit test keeps this honest).
 
 ## Correctness bar
 
-Ground truth is the SQL reference (`brokenspoke-analyzer`); during the Phase 38 split the
-algorithm is additionally pinned to the frozen `bna-core` oracle on Aspen. Any behavioural
-change must be validated — see [Validation & parity](validation.md). When the spec and the
-SQL reference disagree, the SQL reference wins.
+Ground truth is the SQL reference (`brokenspoke-analyzer`); the algorithm is pinned to a
+frozen reference output on Aspen. Any behavioural change must be validated — see
+[Validation & parity](validation.md). When the spec and the SQL reference disagree, the
+SQL reference wins.

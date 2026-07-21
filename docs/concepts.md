@@ -53,15 +53,15 @@ parse → census → jobs → attributes → segment → stress
 
 Each stage is a `StageSpec`: a name, its upstream dependencies, the dataset inputs it
 needs, a version, and a compute callable that reads files from upstream directories and
-writes files into its own output directory. The core ships `PIPELINE` as a static list;
-the orchestration app re-derives a DAG from the same `depends_on` metadata.
+writes files into its own output directory. `bikescore` ships `PIPELINE` as a static list;
+the same `depends_on` metadata is enough for a larger tool to re-derive a DAG from it.
 
 ## `score_city`
 
 The database-free driver: it runs every stage in `PIPELINE` order into a temp directory,
 wiring each stage's inputs from prior outputs, and returns a
-[`ScoreResult`](reference/api.md) mapping each stage to its output directory. No SQLite,
-no hashing, no run store — that machinery lives in `bikescore-app`.
+[`ScoreResult`](reference/api.md) mapping each stage to its output directory. There is no
+SQLite, no hashing, and no run store — `score_city` simply runs the stages in order.
 
 ```python
 result = score_city(inputs, config)

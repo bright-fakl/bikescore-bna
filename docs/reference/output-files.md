@@ -1,6 +1,6 @@
 # Output files
 
-The core library has **no run store**. [`score_city`](api.md) runs each stage into a
+`bikescore` has **no run store**. [`score_city`](api.md) runs each stage into a
 subdirectory of a temporary working directory and returns a [`ScoreResult`](api.md):
 
 ```python

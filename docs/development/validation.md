@@ -2,7 +2,7 @@
 
 bikescore validates its output **stage by stage** against a *reference directory* — a
 ground-truth set of per-stage parquets. The repo ships one: `tests/oracle/aspen`, the
-frozen bna-core output for Aspen, Colorado (the maintainer's manual validation city).
+frozen reference output for Aspen, Colorado (the maintainer's manual validation city).
 References can also be exported from [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer),
 the original SQL/PostGIS implementation.
 

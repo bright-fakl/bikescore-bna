@@ -68,7 +68,7 @@ The [destination catalog](destinations.md) is the fourth consumer of the DSL: ea
 
 ## Where extensions live
 
-There is **no plugin import hook** in the core — extensions are carried as data inside a
+There is **no plugin import hook** in `bikescore` — extensions are carried as data inside a
 *scenario*. To extend, derive a new scenario from `default` and edit its rulesets,
 attribute registry, or destination catalog; `build_config(path)` loads it and
 `config.validate()` checks it. (The separate **stage** plugin contract — adding a whole new

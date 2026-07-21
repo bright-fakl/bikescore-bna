@@ -1,5 +1,5 @@
 site_name: bikescore
-site_description: Single-city bicycle network analysis as a database-free library
+site_description: A pure-Python, database-free port of the PeopleForBikes bicycle network analysis
 repo_url: https://github.com/bright-fakl/bikescore
 docs_dir: docs
 
@@ -25,6 +25,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Why bikescore: why-bikescore.md
   - Installation: installation.md
   - Concepts: concepts.md
   - How it works:

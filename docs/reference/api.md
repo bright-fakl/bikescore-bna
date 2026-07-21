@@ -1,6 +1,6 @@
 # Python API
 
-`bikescore` scores a single city with no database, no workspace, and no web layer. The
+`bikescore` scores a single city in-process, with no database and no server. The
 deliverable surface is small: build a config, hand in the input files, get scores back.
 
 ```python
@@ -10,11 +10,6 @@ config = build_config("default")
 result = score_city(inputs, config)          # inputs: {"osm": ..., "boundary": ..., ...}
 scores = result.output("scores", "scores.parquet")
 ```
-
-!!! note "Filled across Phase 38"
-    `build_config` / `list_bundled_scenarios` land in 38b; the `StageSpec` contract,
-    `PIPELINE`, and the `score_city` skeleton in **38c**; the stages that fill `PIPELINE`
-    in 38d/38e; end-to-end parity in 38f; `acquire_city` + CLI in 38g.
 
 ## Config
 
@@ -37,8 +32,8 @@ score_city(inputs: dict[str, Path], config: BNAConfig,
 ```
 
 Runs every stage in `PIPELINE` order into a fresh temp directory — no SQLite, no
-content-addressed hashing, no run store, no `graphlib`. It is the engine-lite
-replacement for the app's `PipelineEngine.execute_run` minus the orchestration.
+content-addressed hashing, no run store, no `graphlib`. It is the minimal driver: the
+stages, in order, and nothing else.
 
 - **`inputs`** — dataset-input name → file path. Must cover every `dataset_inputs` name
   the stages declare, e.g. `{"osm": ..., "boundary": ..., "census": ..., "lodes_main":
@@ -54,9 +49,10 @@ convenience `result.output(stage, filename) -> Path`.
 
 ## The stage contract — `StageSpec`, `PIPELINE`, `run_stage`
 
-This is the **public plugin contract**: the orchestration app (`bikescore-app`) consumes
-these to build its content-addressed run store, dynamic DAG, and web UI. Core never
-imports the app — the dependency direction is app → core, one way.
+This is the **public plugin contract**: a larger orchestration layer can consume these to
+build a content-addressed run store, a dynamic DAG, and a UI on top of `bikescore`,
+without `bikescore` ever depending on it — the dependency direction is one way, into the
+library. `score_city` itself uses only this contract.
 
 ```python
 @dataclass(frozen=True)
@@ -75,26 +71,27 @@ def run_stage(stage, upstream_dirs, dataset_paths, output_dir, config) -> None: 
 
 - **`PIPELINE`** is an explicit ordered list, **not** a runtime graph. The full pipeline
   is a fixed sequence (no config-driven stage inclusion), so core needs only *ordering*.
-  The dynamic DAG system (topological sort, ancestors/descendants, reuse planner,
-  `--from/--to` windows) lives in the app, which re-derives its graph from the same
-  `depends_on` metadata. One source of truth for deps; a stdlib drift-guard test asserts
-  `PIPELINE` is a valid topological order.
+  A dynamic DAG system (topological sort, ancestors/descendants, reuse planner,
+  `--from/--to` windows) is something a larger tool can layer on, re-deriving its graph
+  from the same `depends_on` metadata. One source of truth for deps; a stdlib drift-guard
+  test asserts `PIPELINE` is a valid topological order.
 - **`run_stage`** is the shared primitive: it assembles `input_paths` (each `depends_on`
   name → its upstream output dir; each `dataset_inputs` name → its path under a
-  `"dataset:<name>"` key), then calls `stage.run`. `score_city` loops it; the app engine
-  wraps the *same* primitive with hash/reuse/persist, so the two execution paths cannot
-  drift. Dataset-path *resolution* stays out of the primitive (core: caller paths; app:
-  `file_id → path`).
+  `"dataset:<name>"` key), then calls `stage.run`. `score_city` loops it; an orchestration
+  engine can wrap the *same* primitive with hash/reuse/persist, so the two execution paths
+  cannot drift. Dataset-path *resolution* stays out of the primitive (`score_city` passes
+  caller paths; an orchestrator resolves its own `file_id → path`).
 - **The metadata is the orchestration contract.** `version` and the co-located
   `config_slice_for_stage` / `_STAGE_CONFIG_FIELDS` (in `bikescore.config`) look "dead"
-  in core — `score_city` reads only `depends_on` / `dataset_inputs` — but they are the
-  cache-buster and the fine-grained-invalidation key the app relies on. They stay
-  co-located with the stage that owns them (the author is the only party who knows the
-  right value); moving them to the app would force app edits on every algorithm change.
+  in the library — `score_city` reads only `depends_on` / `dataset_inputs` — but they are
+  the cache-buster and the fine-grained-invalidation key any caching layer relies on. They
+  stay co-located with the stage that owns them (the author is the only party who knows the
+  right value); moving them out of the library would force external edits on every
+  algorithm change.
 
 ### Determinism invariant (the reuse contract)
 
-Content-addressed reuse in the app silently assumes each stage's output is a
+Content-addressed reuse in any caching layer silently assumes each stage's output is a
 **deterministic function of `(config-slice, upstream output hashes, dataset hashes,
 version)`** and nothing else — no unseeded RNG, wall-clock timestamps, environment reads,
 or unordered output. A violation is a silent parity bug, not a crash. A stage that cannot
@@ -103,11 +100,11 @@ content-addressed on that stage's *actual* output hash.
 
 ### Execution-model assumptions (A–F)
 
-`score_city` and the app are a **generic "cached DAG-of-file-stages runner"** with BNA as
-plugin #1. The orchestrator makes **zero domain assumptions** (nothing about bikes / OSM /
-scoring) but a small fixed set of execution-model assumptions. Any second compute library
-that ships `list[StageSpec]` + a config factory + (optionally) an `InputProvider` is
-orchestratable, whatever its domain.
+The stage contract is designed so a **generic "cached DAG-of-file-stages runner"** can
+drive `bikescore` as plugin #1. Such a runner makes **zero domain assumptions** (nothing
+about bikes / OSM / scoring) but a small fixed set of execution-model assumptions. Any
+compute library that ships `list[StageSpec]` + a config factory + (optionally) an
+`InputProvider` is orchestratable the same way, whatever its domain.
 
 | | Assumption | What it means |
 |---|---|---|
@@ -115,7 +112,7 @@ orchestratable, whatever its domain.
 | **B** | Determinism | Output is a deterministic function of inputs + config-slice + version (the invariant above). |
 | **C** | Static, declared DAG | `depends_on` is fixed metadata resolved *before* execution — no data-dependent graph shape. |
 | **D** | Named external inputs | `dataset_inputs` names files the orchestrator supplies; names are opaque to it, but *something* (an `InputProvider`) must produce them. |
-| **E** | Hashable, opaque config | The app hashes config per stage and passes it to `run`; a `slice_config(cfg, stage)` hook is an optimization for fine-grained invalidation (whole-config hashing is coarser but still correct). |
+| **E** | Hashable, opaque config | A caching layer hashes config per stage and passes it to `run`; a `slice_config(cfg, stage)` hook is an optimization for fine-grained invalidation (whole-config hashing is coarser but still correct). |
 | **F** | Author-declared version | `version` is an opaque cache-buster the library author bumps on behavioural change. |
 
 **Foreign libraries (the adapter pattern).** A–F cannot be *imposed* on a third-party

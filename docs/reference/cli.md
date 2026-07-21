@@ -1,14 +1,14 @@
 # CLI — `bikescore-score`
 
-The core ships one console script, `bikescore-score`, a thin shell over the
-[Python API](api.md). No workspace or database:
+`bikescore` ships one console script, `bikescore-score`, a thin shell over the
+[Python API](api.md):
 
 ```console
 $ bikescore-score --help
 ```
 
-`<city>` in every command is a **path** to a directory containing a `city.toml`. Slug
-lookup against a multi-city project store lives in bikescore-app, not the core CLI.
+`<city>` in every command is a **path** to a directory containing a `city.toml`. There is
+no slug lookup against a multi-city store — a city is always an explicit path.
 
 ## `score`
 
@@ -84,7 +84,7 @@ YAML file; keep policy in the scenario and put per-run scalar tweaks in a separa
 ## `export`
 
 Run the pipeline for a city and export outputs to GeoJSON / Shapefile / CSV. The full
-pipeline runs first — the core keeps no run store to reuse — then the requested outputs are
+pipeline runs first — `bikescore` keeps no run store to reuse — then the requested outputs are
 written under `--out`. See [Output files → Export](output-files.md#export) for the target
 and bundle catalog.
 
@@ -149,7 +149,7 @@ See [Validation](../development/validation.md) for the full workflow.
 
 ## Working with multiple datasets
 
-The scoring core is a **stateless function of explicit inputs** — it remembers nothing
+`bikescore` is a **stateless function of explicit inputs** — it remembers nothing
 between calls. A "dataset" is just a **directory of the five role-named files** (`osm-*`,
 `boundary-*`, `census-*`, `lodes_main-*`, `lodes_aux-*`); there is no registry. So you
 handle many datasets — or many cities — simply by **looping the same commands**, one
@@ -163,8 +163,9 @@ $ bikescore-score score ./aspen-colorado --datasets ./inputs/2024 --out scores-2
 $ bikescore-score score ./aspen-colorado --datasets ./inputs/2025 --out scores-2025.parquet
 ```
 
-Nothing here needs the app: files are content-addressed (re-acquiring identical bytes is a
-no-op) and the regional-PBF cache is shared across directories (only the clip differs).
+None of this needs any extra tooling: files are content-addressed (re-acquiring identical
+bytes is a no-op) and the regional-PBF cache is shared across directories (only the clip
+differs).
 
 From Python the loop is just as direct. `discover_inputs(dir)` turns a directory into the
 `{role: Path}` mapping `score_city` wants, so batching over cities is a plain `for`:
@@ -189,8 +190,8 @@ inputs["osm"] = Path("./inputs/2025/osm-abc123.pbf")
 score_city(inputs, config)
 ```
 
-What the core deliberately does *not* do is **track** any of this: giving datasets names
-and IDs, versioning them, deduping them as entities, recording provenance, or comparing
-runs across them. That bookkeeping is a system-of-record concern and lives in
-bikescore-app — the split is stateless computation (core) vs. system of record (app), not
-"one dataset (core) vs. many (app)."
+What `bikescore` deliberately does *not* do is **track** any of this: giving datasets
+names and IDs, versioning them, deduping them as entities, recording provenance, or
+comparing runs across them. That bookkeeping is a system-of-record concern, left to
+whatever tool wraps the library; `bikescore` itself stays a stateless function of explicit
+inputs.
