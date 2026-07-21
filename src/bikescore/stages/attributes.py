@@ -106,7 +106,7 @@ def _compute_bike_infra_sql_shadow(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ── Bike-infra facility width default (relocated from impute, Phase 35f) ──────
+# ── Bike-infra facility width default ────────────────────────────────────────
 
 def _fill_facility_width_defaults(df: pd.DataFrame, config: BNAConfig) -> pd.DataFrame:
     """Fill ft/tf_bike_infra_width with the default facility width where a bike
@@ -116,8 +116,7 @@ def _fill_facility_width_defaults(df: pd.DataFrame, config: BNAConfig) -> pd.Dat
     cycleway:*:width tags). Where the column is absent but the paired bike_infra column
     exists, create it so stress rules can compare widths against the 4 ft threshold.
     Default = config.imputation.default_facility_width_ft (5 ft), matching
-    :default_facility_width in stress_segments_higher_order.sql. Relocated verbatim from
-    the retired impute stage (Phase 35f) — not one of the four migrated attribute columns.
+    :default_facility_width in stress_segments_higher_order.sql.
     """
     for _w_col, _infra_col in (
         ("ft_bike_infra_width", "ft_bike_infra"),

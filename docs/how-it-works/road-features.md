@@ -88,11 +88,10 @@ without any special-casing.
 
 Road attributes are computed by the **`attributes` stage** (`bikescore/stages/attributes.py`).
 `functional_class` — including the class-adjustment promotion — is itself a built-in
-`DecisionAttribute` declared in `bikescore/data/attributes/standard-bna.yaml` (Phase 35n),
-as are bike infrastructure, parking, and the one-way flags. There is no separate
-`classification.py` stage or `RuleSet`; the logic lives in the scenario's attribute
-YAML, so it can be customised (e.g. to change how service roads with bicycle access are
-classified) by editing the scenario rather than Python.
+`DecisionAttribute` declared in `bikescore/data/attributes/standard-bna.yaml`,
+as are bike infrastructure, parking, and the one-way flags. The logic lives in the
+scenario's attribute YAML, so it can be customised (e.g. to change how service roads with
+bicycle access are classified) by editing the scenario rather than Python.
 
 SQL equivalents in brokenspoke-analyzer:
 
@@ -110,7 +109,7 @@ SQL equivalents in brokenspoke-analyzer:
 bikescore ships a set of built-in attributes (declared in
 `bikescore/data/attributes/standard-bna.yaml`) that bridge OSM tags to the columns the
 segment, stress, and scoring stages expect. They are **all applied by the single
-`attributes` pipeline stage** — there is no per-stage "gate" mechanism.
+`attributes` pipeline stage**.
 
 ### Categories
 
@@ -118,8 +117,7 @@ The built-ins fall into a few groups:
 
 - **Primary OSM-tag attributes** (`footway`, `tracktype`, `golf`, `golf_cart`, `width`,
   `access`, `oneway`, `oneway:bicycle`) — each declares a raw `osm_tag` so the parse stage
-  loads it as a column. They replace tags that used to be hard-coded in `BASE_WAY_TAGS`
-  (Phase 35g).
+  loads it as a column, keeping `BASE_WAY_TAGS` minimal.
 - **Decision attributes** — `DecisionAttribute` objects that compute columns from those
   tags via the decision DSL: `one_way_car`, `speed_parsed`, `lanes_ft`, `lanes_tf`,
   `width_parsed`, `bike_infra`, `bike_infra_width`, `parking`.
@@ -135,7 +133,7 @@ The built-ins fall into a few groups:
 every way unconditionally: **`highway`, `bicycle`, `name`**. `highway`/`bicycle` drive
 way filtering *before* any attribute runs; `name` is the reserved output-label column.
 Everything else a rule or attribute consumes — including `access`, `oneway`, and
-`oneway:bicycle` — is loaded through a primary attribute (Phase 35g).
+`oneway:bicycle` — is loaded through a primary attribute.
 
 ### `extra_osm_tags()`
 
@@ -145,8 +143,8 @@ OSM tags to extract beyond `BASE_WAY_TAGS`.
 
 ### Execution order — one global topological sort
 
-Attributes do **not** run in per-stage gate passes. The `attributes` stage applies them
-as a single ordered list produced by `AttributeRegistry.in_topo_order()`: a global
+The `attributes` stage applies every attribute as a single ordered list produced by
+`AttributeRegistry.in_topo_order()`: a global
 topological sort where each attribute names in its `after:` field the attributes that must
 run before it (independent attributes are ordered by name for determinism). This lets a
 later attribute read the columns earlier ones produced — e.g. `functional_class` runs last,
@@ -159,8 +157,7 @@ Within the stage (`stages/attributes.py`) the sequence is:
 3. Drop the non-persisted scratch flag columns.
 4. **Fallback passes** — imputation: each attribute's optional `fallback` Decision fills
    the remaining nulls, keyed on the now-promoted `functional_class`, adding `{col}_imputed`
-   flags (`apply_attribute_fallbacks`). This replaces the former separate impute stage
-   (Phase 35f).
+   flags (`apply_attribute_fallbacks`).
 
 ### Selected attribute columns
 
@@ -186,8 +183,7 @@ Before the stress stage runs, every road must have complete values for
 `speed_limit`, `ft_lanes`, `tf_lanes`, and `width_ft`. OpenStreetMap is
 community-maintained and many roads lack explicit tags for these attributes —
 the **fallback passes** of the relevant attributes (run at the tail of the `attributes`
-stage) fill in the gaps. "Imputation" is the name for this fallback behaviour; it is no
-longer a separate pipeline stage (Phase 35f).
+stage) fill in the gaps. "Imputation" is the name for this fallback behaviour.
 
 ## Why imputation is necessary
 
@@ -244,20 +240,17 @@ config.city.default_speed = 20        # mph; residential fallback for this city
 config.city.state_default_speed = 30  # mph; used if the city default is absent
 ```
 
-`ImputationConfig` still exists but only carries `bare_speed_unit` (the unit assumed for
-unitless OSM `maxspeed` values) and `default_facility_width_ft` (the bike-infra width
-fallback) — not the speed/lane defaults.
+`ImputationConfig` carries `bare_speed_unit` (the unit assumed for unitless OSM
+`maxspeed` values) and `default_facility_width_ft` (the bike-infra width fallback).
 
 The per-functional-class speed and lane defaults are the `fallback` passes of the
 `speed_parsed` / `lanes_ft` / `lanes_tf` attributes in
 `bikescore/data/attributes/standard-bna.yaml`. To change them, edit those attributes'
-fallback decisions in the scenario (there are no standalone `speed_imputation.yaml` /
-`lane_imputation.yaml` rule files and no `RuleSet` objects — imputation is expressed
-entirely as attribute fallbacks).
+fallback decisions in the scenario.
 
 ## Implementation
 
-Imputation is not a separate stage: it is the `fallback` passes of the `speed_parsed`,
+Imputation is the `fallback` passes of the `speed_parsed`,
 `lanes_ft`, `lanes_tf`, and bike-infra-width attributes, applied by the `attributes`
 stage (`bikescore/stages/attributes.py`) via `apply_attribute_fallbacks` *after* the
 observed phase and the `functional_class` promotion. So `functional_class` is already set
@@ -283,11 +276,11 @@ read columns written by earlier ones:
 |---|---|
 | `prepare_tables.sql` | `stages/parse.py` (column naming during parse) |
 | `features/one_way.sql` | `one_way_car` attribute (`data/attributes/standard-bna.yaml`) |
-| `features/functional_class.sql` | `functional_class` attribute, observed pass (`data/attributes/standard-bna.yaml`) — Phase 35n |
+| `features/functional_class.sql` | `functional_class` attribute, observed pass (`data/attributes/standard-bna.yaml`) |
 | `features/paths.sql` | `functional_class` attribute + its `footway_wide`/`is_golf_path` flags |
 | `features/bike_infra.sql` | `bike_infra` attribute (`data/attributes/standard-bna.yaml`) |
 | `features/park.sql` | `parking` attribute (`data/attributes/standard-bna.yaml`) |
-| `features/class_adjustments.sql` | `functional_class` attribute, `class_promotion` pass (`data/attributes/standard-bna.yaml`) — Phase 35n |
+| `features/class_adjustments.sql` | `functional_class` attribute, `class_promotion` pass (`data/attributes/standard-bna.yaml`) |
 | `features/legs.sql` | *(deferred to stress stage — requires topology)* |
 | `features/signalized.sql` | intersection attributes (`intersection_attributes.py`, applied by the parse stage) |
 | `features/stops.sql` | intersection attributes (`intersection_attributes.py`, applied by the parse stage) |

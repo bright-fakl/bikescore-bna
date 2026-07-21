@@ -474,10 +474,9 @@ class AttributeRegistry:
     def in_topo_order(self) -> list[Attribute]:
         """Return all registered attributes in topological order over `after:` deps.
 
-        A single global sort (no stage/gate partitioning): each attribute lists in
-        ``after`` the attribute names that must run before it; independent attributes
-        are ordered by name for determinism. The Attributes stage applies this one
-        ordered list (Phase 34i).
+        A single global topological sort: each attribute lists in ``after`` the
+        attribute names that must run before it; independent attributes are ordered
+        by name for determinism. The Attributes stage applies this one ordered list.
         """
         attributes = {f.name: f for f in self._attributes.values()}
         if not attributes:
