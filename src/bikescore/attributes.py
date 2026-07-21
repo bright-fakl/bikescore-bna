@@ -27,7 +27,7 @@ class CustomAttribute:
         compute: Vectorized function: DataFrame -> Series.
         description: Human-readable explanation of what this attribute captures.
         extra_tags: OSM tags this attribute reads from ways_df.
-        after: Intra-gate ordering deps (attribute names that must run before this one).
+        after: Ordering deps (attribute names that must run before this one).
         version: Bump when compute logic changes (used for hashing since Python
             callables can't be hashed by content).
 
@@ -80,7 +80,7 @@ class DecisionAttribute:
         name: Identifier for this attribute (must be unique in the registry).
         compute: A Decision object that defines the computation logic.
         extra_tags: OSM tags this attribute reads that are not in WAY_TAGS.
-        after: Intra-gate ordering deps (attribute names that must run before this one).
+        after: Ordering deps (attribute names that must run before this one).
         description: Human-readable explanation.
     """
 

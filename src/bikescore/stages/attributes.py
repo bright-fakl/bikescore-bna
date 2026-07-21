@@ -1,10 +1,10 @@
 """Attributes stage: assign functional_class, bike_infra, one_way, and park.
 
 SQL equivalents (in execution order):
-  features/one_way.sql           — one_way_car (clip-gate built-in attribute)
+  features/one_way.sql           — one_way_car (built-in attribute)
   features/functional_class.sql  — functional_class from highway tag  [assign_functional_class()]
-  features/bike_infra.sql        — ft/tf_bike_infra + bike one_way    (attributes-gate attribute)
-  features/park.sql              — ft/tf_park from parking tags        (attributes-gate attribute)
+  features/bike_infra.sql        — ft/tf_bike_infra + bike one_way    (built-in attribute)
+  features/park.sql              — ft/tf_park from parking tags        (built-in attribute)
   features/class_adjustments.sql — promotes residential/unclassified → tertiary
 
 Output columns added to ways_df:
