@@ -25,4 +25,4 @@ site/
 tests/oracle/
 
 # Ephemeral CLI/library run outputs (score_city default workdir)
-bikescore-runs/
+bikescore-bna-runs/
