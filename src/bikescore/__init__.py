@@ -11,7 +11,7 @@ This package must never import from the orchestration layer (``bikescore_app``);
 the dependency direction is app -> core only. See phases/38* in the bna-core repo.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 from bikescore.acquire import InputProvider, acquire_city, discover_inputs

@@ -123,3 +123,40 @@ only partially guarantee the *semantic* ones (B determinism, complete E). Hence
 additionally needs B + complete-E + F. **Safe default for anything uncertain:
 `cacheable=False` — correctness over reuse.** You lose reuse *at that node*, never the
 ability to orchestrate.
+
+## Rule & config analysis — `bikescore.decision.analysis`
+
+Static analysis over the decision DSL (`Decision` objects + field catalogs) — no
+orchestration, database, or run store. It powers `BNAConfig.validate()` and the
+orchestration app's `bikescore rules` commands and rule-builder endpoints.
+
+```python
+from bikescore.decision.analysis import (
+    validate_decision,   # static checks: unknown-field, op-type, enum-domain, duplicate-id
+    find_unreachable,    # rules shadowed by an earlier, broader rule
+    check_exhaustive,    # passes that can fall through with no default
+    coverage,            # winning-rule tallies + never-fired detection over a frame
+    trace,               # per-row clause/rule/pass explanation
+    unique_contexts,     # exact, finite threshold-partitioned decision contexts
+    simulate,            # before/after diff of two rule versions over those contexts
+    cross_engine_diff,   # equivalence harness vs a reference decider
+)
+```
+
+Resolve-time producer/consumer and `$var:` validation — what `BNAConfig.validate()`
+calls to reject a config at save/resolve:
+
+```python
+from bikescore.decision.analysis.producer_consumer import unproduced_references
+from bikescore.decision.analysis.variables import (
+    undeclared_variables, null_variables, orphan_overrides,
+)
+```
+
+- **`unproduced_references(config)`** — columns an active rule/stage references that no
+  active attribute, ruleset output, base OSM tag, or stage produces.
+- **`undeclared_variables(config)`** — referenced `$var:` names neither declared in the
+  scenario's `variables` nor supplied by a stage's fixed `_RULE_VARIABLES` vocabulary
+  (discovered by walking `PIPELINE`).
+- **`null_variables`** / **`orphan_overrides`** — advisory: declared-but-null variables,
+  and city overrides no active rule references.

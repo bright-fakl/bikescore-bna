@@ -1,6 +1,6 @@
 [project]
 name = "bikescore"
-version = "0.1.0"
+version = "0.2.0"
 description = "Single-city bicycle network analysis — stress, connectivity, and access scoring as a database-free library"
 readme = "README.md"
 license = { text = "MIT" }
