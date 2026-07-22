@@ -23,8 +23,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bikescore import CityIdentity, acquire_city, build_config, score_city
-from bikescore.acquire import (
+from bikescore_bna import CityIdentity, acquire_city, build_config, score_city
+from bikescore_bna.acquire import (
     InputProvider,
     _build_geofabrik_url,
     _find_pbf_by_url,
@@ -32,9 +32,9 @@ from bikescore.acquire import (
     _pbf_rel_path_from_url,
     _state_abbr_from_fips,
 )
-from bikescore.data_pool import store_file
-from bikescore.deviations import KNOWN_DEVIATIONS
-from bikescore.validation import compare_dataframes
+from bikescore_bna.data_pool import store_file
+from bikescore_bna.deviations import KNOWN_DEVIATIONS
+from bikescore_bna.validation import compare_dataframes
 
 ASPEN = CityIdentity(
     name="Aspen", slug="aspen-colorado", region="Colorado",
@@ -207,7 +207,7 @@ def test_acquire_city_output_scores_to_oracle() -> None:
 
 
 def test_discover_inputs_maps_roles(tmp_path: Path) -> None:
-    from bikescore import discover_inputs
+    from bikescore_bna import discover_inputs
 
     d = tmp_path / "datasets"
     d.mkdir()

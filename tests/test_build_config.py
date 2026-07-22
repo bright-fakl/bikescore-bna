@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import yaml
 
-from bikescore import build_config, list_bundled_scenarios
-from bikescore.config_resolver import serialize_complete_config
-from bikescore.scenarios import _bundled_scenarios_dir
+from bikescore_bna import build_config, list_bundled_scenarios
+from bikescore_bna.config_resolver import serialize_complete_config
+from bikescore_bna.scenarios import _bundled_scenarios_dir
 
 
 def _ser(arg: object) -> dict:

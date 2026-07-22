@@ -1,6 +1,6 @@
 """A6 — live acquisition integration test (manual / not run in CI).
 
-Exercises the *real* :class:`~bikescore.acquire.UsCensusLodesProvider`: downloads (or
+Exercises the *real* :class:`~bikescore_bna.acquire.UsCensusLodesProvider`: downloads (or
 reuses the cached) Colorado PBF, clips it to Aspen's boundary, and fetches census +
 LODES, then drives the full pipeline. Marked ``integration`` + ``slow`` so it is
 deselected by the default ``-m "not slow and not integration"`` addopts — run it
@@ -27,7 +27,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bikescore import CityIdentity, acquire_city, build_config, score_city
+from bikescore_bna import CityIdentity, acquire_city, build_config, score_city
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 

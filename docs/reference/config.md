@@ -6,7 +6,7 @@ Every run is driven by one `BNAConfig` — a plain dataclass tree the
 over the package defaults.
 
 ```python
-from bikescore import build_config
+from bikescore_bna import build_config
 
 config = build_config("default")                       # bundled scenario
 config = build_config("default", {"graph.low_stress_threshold": 2})   # + overrides
@@ -23,7 +23,7 @@ build_config(scenario: str | dict | Path | None = None,
 | `scenario` | resolves to |
 |---|---|
 | `None` | `BNAConfig.with_defaults()` — the compiled-in defaults, nothing layered |
-| `"default"` / a name | a **bundled** scenario under `bikescore/scenarios/data/` (see [`list_bundled_scenarios`](api.md)) |
+| `"default"` / a name | a **bundled** scenario under `bikescore-bna/scenarios/data/` (see [`list_bundled_scenarios`](api.md)) |
 | a `Path` to a `.yaml` | a caller-supplied scenario document on disk |
 | a `dict` | an in-memory scenario document |
 

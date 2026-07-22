@@ -1,7 +1,7 @@
 # Edit the stress rules
 
 LTS assignment is **data, not code**: a decision table evaluated by the rule engine.
-The segment table lives in `bikescore/rules/data/segment_stress.yaml` (and the
+The segment table lives in `bikescore-bna/rules/data/segment_stress.yaml` (and the
 intersection table alongside it). To change the logic, overlay it from a scenario.
 
 ## Anatomy of a rule set
@@ -41,7 +41,7 @@ rule_sets:
 ```
 
 ```console
-$ bikescore-score score ./aspen-colorado --scenario my-stress.yaml
+$ bikescore-bna score ./aspen-colorado --scenario my-stress.yaml
 ```
 
 Because `brokenspoke-analyzer` is the parity ground truth, validate any rule change

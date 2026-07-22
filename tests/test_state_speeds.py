@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from bikescore.city import CityIdentity
-from bikescore.config import BNAConfig
-from bikescore.state_speeds import (
+from bikescore_bna.city import CityIdentity
+from bikescore_bna.config import BNAConfig
+from bikescore_bna.state_speeds import (
     city_default_speed,
     resolve_city_speed_defaults,
     state_default_speed,

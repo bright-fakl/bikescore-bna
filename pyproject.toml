@@ -1,5 +1,5 @@
 [project]
-name = "bikescore"
+name = "bikescore-bna"
 version = "0.2.0"
 description = "Single-city bicycle network analysis — stress, connectivity, and access scoring as a database-free library"
 readme = "README.md"
@@ -20,7 +20,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 # Core deps only — the scoring library carries NO web/orchestration dependencies.
-# (fastapi/uvicorn/anyio + the SQLite run store live in bikescore-app.)
+# (fastapi/uvicorn/anyio + the SQLite run store live in bikescore.)
 dependencies = [
     # OSM parsing
     "osmium>=3.7",
@@ -76,19 +76,19 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bright-fakl/bikescore"
-Documentation = "https://bright-fakl.github.io/bikescore"
-Repository = "https://github.com/bright-fakl/bikescore"
+Homepage = "https://github.com/bright-fakl/bikescore-bna"
+Documentation = "https://bright-fakl.github.io/bikescore-bna"
+Repository = "https://github.com/bright-fakl/bikescore-bna"
 
 [project.scripts]
-bikescore-score = "bikescore.cli:main"
+bikescore-bna = "bikescore_bna.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/bikescore"]
+packages = ["src/bikescore_bna"]
 
 # ── Ruff ─────────────────────────────────────────────────────────────────────
 [tool.ruff]
@@ -130,5 +130,5 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/bikescore"]
+source = ["src/bikescore_bna"]
 omit = ["tests/*"]

@@ -7,7 +7,7 @@ as one-off overrides or as a saved scenario.
 ## One-off overrides (`--set`)
 
 ```console
-$ bikescore-score score ./aspen-colorado \
+$ bikescore-bna score ./aspen-colorado \
     --set city.default_speed=40 \
     --set imputation.default_lanes=2
 ```
@@ -16,7 +16,7 @@ Each `--set key=value` sets a dotted config path; values are coerced to int / fl
 bool / string automatically. In Python, pass an overrides dict:
 
 ```python
-from bikescore import build_config, score_city
+from bikescore_bna import build_config, score_city
 config = build_config("default", {"city.default_speed": 40})
 result = score_city(inputs, config)
 ```
@@ -40,7 +40,7 @@ config:
 Run it by name or path:
 
 ```console
-$ bikescore-score score ./aspen-colorado --scenario lower-speeds.yaml
+$ bikescore-bna score ./aspen-colorado --scenario lower-speeds.yaml
 ```
 
 A `sparse` scenario carries only the fields it changes; everything else falls back to the

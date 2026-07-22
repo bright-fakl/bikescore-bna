@@ -123,14 +123,14 @@ distances. The SQL files are:
 
 When `python_scoring=True`, brokenspoke calls `compute._scipy_direct_connected_census_blocks()`
 instead of the SQL connected-blocks scripts — the same scipy-based Dijkstra
-approach that bikescore always uses.
+approach that bikescore-bna always uses.
 
-bikescore replaces the SQL path entirely with vectorised scipy Dijkstra in
+bikescore-bna replaces the SQL path entirely with vectorised scipy Dijkstra in
 `stages/connectivity.py`, which is equivalent to brokenspoke's
 `_scipy_direct_connected_census_blocks()` path. There are no known deviations
 in the connectivity stage.
 
 The main structural difference is performance: brokenspoke's default pgRouting
-path runs O(blocks × pairs) SQL queries; the scipy path (and therefore bikescore)
+path runs O(blocks × pairs) SQL queries; the scipy path (and therefore bikescore-bna)
 runs a single graph traversal per source block, which is substantially faster on
 large cities.

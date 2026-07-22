@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import LineString
 
-from bikescore import (
+from bikescore_bna import (
     BNAConfig,
     ScoreResult,
     build_config,
@@ -26,8 +26,8 @@ from bikescore import (
     list_export_targets,
     score_city,
 )
-from bikescore.city import CityIdentity
-from bikescore.export import (
+from bikescore_bna.city import CityIdentity
+from bikescore_bna.export import (
     _EXPORT_BUNDLES,
     _EXPORT_TARGETS,
     ExportBundle,
@@ -109,7 +109,7 @@ def _fake_context(tmp_path: Path) -> ExportContext:
 
 def test_write_stress_geojson_roundtrips(tmp_path: Path) -> None:
     ctx = _fake_context(tmp_path)
-    from bikescore.export import _write_target
+    from bikescore_bna.export import _write_target
 
     out = tmp_path / "out"
     out.mkdir()
@@ -125,7 +125,7 @@ def test_write_stress_geojson_roundtrips(tmp_path: Path) -> None:
 
 def test_write_stress_csv_drops_geometry(tmp_path: Path) -> None:
     ctx = _fake_context(tmp_path)
-    from bikescore.export import _write_target
+    from bikescore_bna.export import _write_target
 
     out = tmp_path / "out"
     out.mkdir()

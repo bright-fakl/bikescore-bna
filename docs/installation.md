@@ -1,17 +1,17 @@
 # Installation
 
-`bikescore` requires **Python 3.11+**.
+`bikescore-bna` requires **Python 3.11+**.
 
 ## Install the package
 
 ```console
-$ pip install bikescore
+$ pip install bikescore-bna
 ```
 
 or, in a `uv`-managed project:
 
 ```console
-$ uv add bikescore
+$ uv add bikescore-bna
 ```
 
 This pulls the scientific stack it depends on (GeoPandas, Shapely, pyproj, SciPy,
@@ -38,8 +38,8 @@ Everything works without it — the binary only affects acquisition speed, never
 ## Verify
 
 ```console
-$ bikescore-score scenarios
+$ bikescore-bna scenarios
 default
-$ python -c "import bikescore; print(bikescore.__version__)"
+$ python -c "import bikescore_bna; print(bikescore_bna.__version__)"
 0.1.0
 ```

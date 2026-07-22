@@ -113,7 +113,7 @@ Each script uses `ST_DWithin(boundary, max_trip_distance)` to restrict POIs to
 the service area, then applies PostGIS `ST_ClusterDBSCAN` for polygon-based types
 and a custom clustering approach for point types.
 
-bikescore collects all destination POIs during the parse stage (a single osmium
+bikescore-bna collects all destination POIs during the parse stage (a single osmium
 pass), then clusters and filters them in `stages/destinations.py` using
 `scipy.cluster.hierarchy`. The `OsmMatcher` conditions defined in
 `DestinationRegistry` encode the same tag logic as the per-type SQL scripts.
@@ -123,7 +123,7 @@ Two known deviations affect destination counts:
 - **[§5 Clipping differences](deviations.md#clipping-approaches)** — brokenspoke's
   vestigial `osmconvert -b=bbox` step can exclude transit stops that are within
   the service radius but outside the census-block bounding box (e.g. ferry
-  terminals). bikescore clips only by `DWithin(max_trip_distance)` and
+  terminals). bikescore-bna clips only by `DWithin(max_trip_distance)` and
   includes these stops correctly.
 - **[§6a Retail cluster floating-point sensitivity](deviations.md#6a-floating-point-sensitivity-at-cluster-threshold)** —
   for a small number of retail POI pairs at the 50 m cluster threshold,

@@ -21,7 +21,7 @@ jobs:
         run: uv sync --group dev
 
       # Load-bearing architecture guard: the scoring core must never import the
-      # orchestration layer (bikescore_app). Runs first, standalone, so a violation
+      # orchestration layer (bikescore). Runs first, standalone, so a violation
       # fails CI even before the rest of the suite.
       - name: Import-direction guard (core must not import app)
         run: uv run pytest tests/test_import_guard.py -q

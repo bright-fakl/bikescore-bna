@@ -1,20 +1,20 @@
 # Reading OSM data
 
 OpenStreetMap (OSM) is the data source for the road network, cycling infrastructure,
-and destination points of interest. This page explains how bikescore reads
+and destination points of interest. This page explains how bikescore-bna reads
 and prepares OSM data before the analysis begins.
 
 ## What OpenStreetMap is
 
 OpenStreetMap is a free, community-maintained geographic database. Millions of
 contributors around the world map roads, buildings, amenities, parks, and
-hundreds of other features. bikescore uses OSM for:
+hundreds of other features. bikescore-bna uses OSM for:
 
 - **Road geometry** — the actual line shapes of every street, path, and cycleway
 - **Road attributes** — speed limits, lane counts, one-way status, cycling infra tags
 - **Points of interest** — schools, hospitals, grocery stores, transit stops, parks
 
-OSM data is global and free, which means bikescore can run on any city in the world
+OSM data is global and free, which means bikescore-bna can run on any city in the world
 without requiring proprietary data sources.
 
 ## PBF files and where they come from
@@ -24,13 +24,13 @@ files that can contain all features in a region. State and national extracts are
 available from [Geofabrik](https://download.geofabrik.de/). For example, the
 entire US state of Virginia is a single PBF file of about 500 MB.
 
-bikescore reads PBF files directly using [osmium](https://osmcode.org/pyosmium/),
+bikescore-bna reads PBF files directly using [osmium](https://osmcode.org/pyosmium/),
 a Python binding to the fast osmium C++ library. The parse stage makes a single
 pass through the file, collecting all relevant features in one sweep.
 
 ## The study area and buffer
 
-bikescore analyses a *city*, not an entire region. Before the parse stage even
+bikescore-bna analyses a *city*, not an entire region. Before the parse stage even
 runs, the input PBF has already been clipped to the city boundary by the
 `acquire` step: osmium extracts the city from the regional PBF using
 `--strategy=complete_ways`, which keeps any way that has at least one node inside
@@ -52,7 +52,7 @@ near the boundary can route through nearby roads outside the city. The segment
 stage later splits these cross-boundary roads at the exact boundary crossing
 point and removes outside dead-end chains, leaving clean in/out sub-segments.
 
-## What bikescore reads from OSM
+## What bikescore-bna reads from OSM
 
 ### Roads (highway ways)
 
@@ -60,7 +60,7 @@ Any OSM way with a `highway=*` tag is extracted. This includes motorways, reside
 streets, cycleways, footways, paths, and tracks. Ways with a `bicycle=*` tag are
 also extracted even if they lack a `highway` tag.
 
-For each way, bikescore stores:
+For each way, bikescore-bna stores:
 
 - **Geometry** — the LineString in WGS84 (EPSG:4326)
 - **Node IDs** — the ordered list of OSM node IDs forming the way
@@ -88,7 +88,7 @@ These flags are used later by the stress stage to compute intersection stress
 
 ### Destination POIs
 
-bikescore scores cycling access to 13 categories of destination — schools,
+bikescore-bna scores cycling access to 13 categories of destination — schools,
 hospitals, grocery stores, parks, and others. During the same osmium parse pass,
 every node and closed way (polygon) is checked against the destination type matchers.
 
@@ -99,7 +99,7 @@ are applied later in the destinations stage.
 
 ## Why a single parse pass?
 
-OSM PBF files can be large (500 MB for a US state). bikescore makes exactly one
+OSM PBF files can be large (500 MB for a US state). bikescore-bna makes exactly one
 pass through the file, collecting roads, intersection nodes, and POIs in the same
 sweep. This is efficient and avoids loading the entire file into memory.
 
@@ -108,14 +108,14 @@ sweep. This is efficient and avoids loading the entire file into memory.
 The parse and clip stages are configured through `BNAConfig`:
 
 ```python
-from bikescore.config import BNAConfig
+from bikescore_bna.config import BNAConfig
 
 config = BNAConfig.with_defaults()
 # Override buffer distance (default 2680m)
 config.max_trip_distance = 3000
 
 # Add a custom destination type to the parser
-from bikescore.destinations import DestinationType, OsmMatcher
+from bikescore_bna.destinations import DestinationType, OsmMatcher
 config.destinations.register(DestinationType(
     name="libraries",
     display_name="Public Libraries",
@@ -128,7 +128,7 @@ config.destinations.register(DestinationType(
 
 ## Implementation
 
-OSM parsing is implemented in `bikescore/stages/parse.py` using a single
+OSM parsing is implemented in `bikescore-bna/stages/parse.py` using a single
 `osmium.SimpleHandler` subclass.
 
 SQL equivalents in brokenspoke-analyzer:
@@ -182,7 +182,7 @@ computation begins:
    clip_osm.sql keeps any segment within 2,680 m of the boundary polygon, creating a
    buffer zone from the cross-boundary road portions.
 
-bikescore replaces steps 1–4 with three stages:
+bikescore-bna replaces steps 1–4 with three stages:
 
 - **acquire** — `pre_clip_pbf(region_pbf, boundary, buffer_m=0.0)` runs
   `osmium extract --strategy=complete_ways -p boundary.geojson`. Both pipelines
@@ -196,7 +196,7 @@ bikescore replaces steps 1–4 with three stages:
   out-of-city dead-end chains. This is the step that produces clean inside/outside
   sub-segments from cross-boundary roads.
 
-| brokenspoke file | bikescore equivalent |
+| brokenspoke file | bikescore-bna equivalent |
 |---|---|
 | `runner.run_osmium_extract` | `acquire.py: pre_clip_pbf()` |
 | `runner.run_osm_convert` (bbox, vestigial) | *(absent — no bbox step)* |
@@ -208,14 +208,14 @@ bikescore replaces steps 1–4 with three stages:
 roads. osmium's `complete_ways` strategy gives both the full geometry of roads that
 cross the city boundary. In brokenspoke, osm2pgrouting splits ways at intersection
 nodes, then `clip_osm.sql` retains any resulting segment within 2,680 m of the
-boundary polygon. In bikescore there is no clip stage — `parse` keeps all ways
+boundary polygon. In bikescore-bna there is no clip stage — `parse` keeps all ways
 from the city PBF (every way already intersects the boundary by construction);
 the `segment` stage then splits them at intersection nodes and at the exact
 boundary crossing point, and removes outside dead-end chains. See
 [Differences from brokenspoke-analyzer — Clipping](deviations.md#clipping-approaches)
 for a full comparison.
 
-**osmconvert bbox step**: bikescore has no equivalent. When a cross-boundary road
+**osmconvert bbox step**: bikescore-bna has no equivalent. When a cross-boundary road
 has outside nodes that extend beyond the census-block bounding box, osmconvert
 truncates the road at the bbox edge — the outside portion is removed from the
 geometry. This is the root cause of the segment-length differences noted in

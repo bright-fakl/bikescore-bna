@@ -8,5 +8,5 @@ Practical, task-focused walk-throughs. Start with the first; the rest are indepe
 4. [Edit the stress rules](adjust-stress-yaml.md) — author the LTS decision table.
 5. [Add a destination](add-destination.md) — extend the access destination catalog.
 
-All tutorials use the `bikescore-score` CLI and the equivalent Python API
+All tutorials use the `bikescore-bna` CLI and the equivalent Python API
 interchangeably — see [CLI](../reference/cli.md) and [Python API](../reference/api.md).

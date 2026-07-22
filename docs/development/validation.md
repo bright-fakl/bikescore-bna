@@ -1,6 +1,6 @@
 # Validation
 
-bikescore validates its output **stage by stage** against a *reference directory* — a
+bikescore-bna validates its output **stage by stage** against a *reference directory* — a
 ground-truth set of per-stage parquets. The repo ships one: `tests/oracle/aspen`, the
 frozen reference output for Aspen, Colorado (the maintainer's manual validation city).
 References can also be exported from [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer),
@@ -22,7 +22,7 @@ A reference directory holds one parquet per stage output:
 Score a city and compare every stage output against the reference:
 
 ```bash
-bikescore-score validate <city> --reference tests/oracle/aspen
+bikescore-bna validate <city> --reference tests/oracle/aspen
 ```
 
 `<city>` is a path to a city directory (its inputs are read from `<city>/datasets`, or
@@ -47,9 +47,9 @@ fail the run; pass `--strict` to treat them as differences.
 The same harness is a library function — score a city, then compare the result:
 
 ```python
-from bikescore import build_config, discover_inputs, score_city
-from bikescore.parity import validate_result
-from bikescore.deviations import KNOWN_DEVIATIONS
+from bikescore_bna import build_config, discover_inputs, score_city
+from bikescore_bna.parity import validate_result
+from bikescore_bna.deviations import KNOWN_DEVIATIONS
 
 result = score_city(discover_inputs("aspen-colorado/datasets"), build_config("default"))
 
@@ -83,7 +83,7 @@ Each `StageParity.report` is a `ValidationReport`:
 ## Tolerance and deviations
 
 Numeric columns compare exactly by default (`compare_dataframes(tolerance=...)` loosens
-it). Known permanent divergences from the SQL reference live in `bikescore.deviations`
+it). Known permanent divergences from the SQL reference live in `bikescore_bna.deviations`
 (`KNOWN_DEVIATIONS`) and are excluded from the pass/fail decision when passed in.
 
 See [Differences from brokenspoke-analyzer](../how-it-works/deviations.md) for the full

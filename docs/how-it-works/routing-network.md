@@ -79,7 +79,7 @@ the routing graph.
 
 This process is called *topology splitting* and mirrors what osm2pgrouting does for
 the SQL reference implementation. A node is an intersection if it appears in more
-than one way. For each way, bikescore walks the node sequence and splits whenever it
+than one way. For each way, bikescore-bna walks the node sequence and splits whenever it
 reaches an intersection node, carrying that node forward as the start of the next
 segment.
 
@@ -101,7 +101,7 @@ and end nodes would create ~5% extra connectivity pairs, inflating scores.
 Some path segments form recreational trails — long, spread-out networks of cycling
 paths that constitute genuine cycling destinations (not just short connectors).
 
-After topology splitting, bikescore groups connected path segments into clusters using
+After topology splitting, bikescore-bna groups connected path segments into clusters using
 union-find on shared node IDs. Each cluster that is long enough and geometrically
 spread-out enough qualifies as a trail for recreational scoring.
 
@@ -142,9 +142,9 @@ brokenspoke builds the routing graph through two tools and one SQL script:
 | Road–block association | `connectivity/census_blocks.sql` | Associates road segments with census blocks using a 15 m buffer |
 | Graph construction | `connectivity/build_network.sql` | Creates the pgRouting network table used by reachable-roads queries |
 
-bikescore replaces these with:
+bikescore-bna replaces these with:
 
-| bikescore file | What it does |
+| bikescore-bna file | What it does |
 |---|---|
 | `stages/segment.py` | Topology splitting (pure Python; mirrors osm2pgrouting output) |
 | `stages/graph.py` | Builds scipy CSR sparse matrices for high-stress and low-stress routing |
@@ -155,12 +155,12 @@ topology:
 - **[§2a Topology-ordering orphan roads](deviations.md#2a-topology-ordering-orphan-roads)** —
   brokenspoke splits topology *before* dropping unclassified roads, so isolated
   road clusters that connect only to deleted ways can pass the orphan check.
-  bikescore classifies first, so these clusters are correctly identified as
+  bikescore-bna classifies first, so these clusters are correctly identified as
   dead ends.
 - **[§3a Boundary polygon clip vs. bounding-box truncation](deviations.md#3a-boundary-polygon-clip-vs-bounding-box-truncation)** —
   brokenspoke's vestigial `osmconvert -b=bbox --drop-broken-refs` step truncates
   road geometries at the rectangular census-block bounding box, shortening segments
-  that cross the bbox edge. bikescore has no bbox step, so these roads retain their
+  that cross the bbox edge. bikescore-bna has no bbox step, so these roads retain their
   full geometry.
 
 ### Buffer zone
@@ -168,7 +168,7 @@ topology:
 Both pipelines include a routing buffer zone — road segments outside the city
 boundary that cyclists near the edge can use to route through neighbouring areas.
 The buffer zone comes from roads that physically cross the city boundary: osmium's
-`complete_ways` strategy (used by both brokenspoke and bikescore) preserves the
+`complete_ways` strategy (used by both brokenspoke and bikescore-bna) preserves the
 full geometry of such roads, including nodes outside the polygon.
 
 In brokenspoke, after osm2pgrouting splits those roads into individual topology
@@ -176,7 +176,7 @@ segments, `clip_osm.sql` retains outside segments within `max_trip_distance`
 (2,680 m) of the city boundary and deletes the rest. Only the city-specific
 osmium extract is in the database at this point — not the full regional dataset.
 
-In bikescore, the clip stage keeps whole way objects that intersect the buffered
+In bikescore-bna, the clip stage keeps whole way objects that intersect the buffered
 boundary — nodes are not trimmed at this point. The segment stage then splits ways
 at intersection nodes and at the exact city boundary crossing point (inserting
 virtual nodes), and removes outside dead-end chains. Roads *entirely* outside the

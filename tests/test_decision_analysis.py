@@ -1,4 +1,4 @@
-"""Decision-DSL analysis surface (``bikescore.decision.analysis``).
+"""Decision-DSL analysis surface (``bikescore_bna.decision.analysis``).
 
 Ported from bna-core's Phase 30e/35h/35i suites when the analysis package was moved
 into the core library (spec-issue OPEN-38k-decision-analysis). Covers trace, coverage /
@@ -6,7 +6,7 @@ never-fired, exact threshold-partitioned unique contexts, unreachable / exhausti
 static validation, the cross-engine diff harness, simulation, and the resolve-time
 producer/consumer + ``$var:`` checks that ``BNAConfig.validate`` depends on.
 
-Library-level only: the ``bikescore rules`` analysis CLI lives in the orchestration app,
+Library-level only: the ``bikescore-bna rules`` analysis CLI lives in the orchestration app,
 not core, so its tests stay there.
 """
 
@@ -15,9 +15,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from bikescore.config import BNAConfig
-from bikescore.decision import Decision, FieldCatalog, FieldSpec, load_decision
-from bikescore.decision.analysis import (
+from bikescore_bna.config import BNAConfig
+from bikescore_bna.decision import Decision, FieldCatalog, FieldSpec, load_decision
+from bikescore_bna.decision.analysis import (
     check_exhaustive,
     coverage,
     cross_engine_diff,
@@ -29,19 +29,19 @@ from bikescore.decision.analysis import (
     unique_contexts,
     validate_decision,
 )
-from bikescore.decision.analysis.contexts import clauses_by_field
-from bikescore.decision.analysis.producer_consumer import (
+from bikescore_bna.decision.analysis.contexts import clauses_by_field
+from bikescore_bna.decision.analysis.producer_consumer import (
     produced_fields,
     unproduced_references,
 )
-from bikescore.decision.analysis.variables import (
+from bikescore_bna.decision.analysis.variables import (
     null_variables,
     orphan_overrides,
     stage_declared_variables,
     undeclared_variables,
     variable_references,
 )
-from bikescore.rules import (
+from bikescore_bna.rules import (
     SEGMENT_CATALOG,
     catalog_for,
     default_intersection_stress_rules,

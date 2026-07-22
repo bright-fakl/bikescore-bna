@@ -41,7 +41,7 @@ config:
 ```
 
 ```console
-$ bikescore-score score ./aspen-colorado --scenario with-bike-shops.yaml
+$ bikescore-bna score ./aspen-colorado --scenario with-bike-shops.yaml
 ```
 
 The `destinations` stage will cluster and locate the new type, and the `scores` /

@@ -129,13 +129,13 @@ take parameterised speed and lane defaults via `psql -v` variables:
 | `stress/stress_lesser_ints.sql` | Intersection stress for lower-order road crossings |
 | `stress/stress_link_ints.sql` | Reset `_link` roads to low intersection stress |
 
-bikescore replaces this sequence with a rules engine (`stages/stress.py`) that
-applies the same logic from YAML rule sets (`bikescore/rules/data/segment_stress.yaml`
+bikescore-bna replaces this sequence with a rules engine (`stages/stress.py`) that
+applies the same logic from YAML rule sets (`bikescore-bna/rules/data/segment_stress.yaml`
 and `intersection_stress.yaml`). The default rules encode the same conditions as
 the SQL files above, producing identical results on the Washington DC validation
 city. There are no known deviations in the stress stage.
 
 The key structural difference is that brokenspoke embeds speed/lane defaults
-directly as SQL substitution parameters, while bikescore's imputation stage
+directly as SQL substitution parameters, while bikescore-bna's imputation stage
 already fills these values before stress runs — so stress rules operate on
 concrete column values rather than SQL-level defaults.

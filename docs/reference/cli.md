@@ -1,10 +1,10 @@
-# CLI — `bikescore-score`
+# CLI — `bikescore-bna`
 
-`bikescore` ships one console script, `bikescore-score`, a thin shell over the
+`bikescore-bna` ships one console script, `bikescore-bna`, a thin shell over the
 [Python API](api.md):
 
 ```console
-$ bikescore-score --help
+$ bikescore-bna --help
 ```
 
 `<city>` in every command is a **path** to a directory containing a `city.toml`. There is
@@ -15,7 +15,7 @@ no slug lookup against a multi-city store — a city is always an explicit path.
 Run the full pipeline and write the block-level `scores` table.
 
 ```console
-$ bikescore-score score <city> [OPTIONS]
+$ bikescore-bna score <city> [OPTIONS]
 ```
 
 | option | default | meaning |
@@ -37,7 +37,7 @@ layout [`acquire`](#acquire) writes. All stage outputs (network, LTS segments,
 neighborhood ratings, …) are left in a temp working directory, printed on stderr.
 
 ```console
-$ bikescore-score score ./aspen-colorado --scenario default --out scores.parquet
+$ bikescore-bna score ./aspen-colorado --scenario default --out scores.parquet
 scores → scores.parquet
 ```
 
@@ -46,7 +46,7 @@ scores → scores.parquet
 Download the raw inputs (OSM, boundary, and — for US cities — census + LODES).
 
 ```console
-$ bikescore-score acquire <city> [--out-dir DIR] [--pbf-cache-dir DIR] [--force]
+$ bikescore-bna acquire <city> [--out-dir DIR] [--pbf-cache-dir DIR] [--force]
 ```
 
 `--out-dir` is where the content-addressed input files land — it **defaults to
@@ -54,7 +54,7 @@ $ bikescore-score acquire <city> [--out-dir DIR] [--pbf-cache-dir DIR] [--force]
 then `score <city>` works with no flags. Point it elsewhere to keep several input sets
 side by side (see [Working with multiple datasets](#working-with-multiple-datasets));
 `--pbf-cache-dir` relocates the shared regional-PBF cache (default `$BIKESCORE_PBF_CACHE`
-or `~/.bikescore/pbf`); `--force` re-downloads the shared regional PBF even on a cache
+or `~/.bikescore-bna/pbf`); `--force` re-downloads the shared regional PBF even on a cache
 hit. See [Data acquisition](../how-it-works/data-acquisition.md).
 
 ## `scenarios`
@@ -62,7 +62,7 @@ hit. See [Data acquisition](../how-it-works/data-acquisition.md).
 List the bundled scenario names available to `--scenario`.
 
 ```console
-$ bikescore-score scenarios
+$ bikescore-bna scenarios
 default
 ```
 
@@ -72,9 +72,9 @@ Dump a bundled scenario's YAML so you can copy, edit, and feed it back via `--sc
 Prints to stdout (redirect or pipe it), or use `--out` to write a file.
 
 ```console
-$ bikescore-score scenario show default > my-scenario.yaml
+$ bikescore-bna scenario show default > my-scenario.yaml
 # …edit my-scenario.yaml…
-$ bikescore-score score ./aspen-colorado --scenario my-scenario.yaml
+$ bikescore-bna score ./aspen-colorado --scenario my-scenario.yaml
 ```
 
 | option | default | meaning |
@@ -94,7 +94,7 @@ requested outputs are written under `--out`. See
 [Output files → Export](output-files.md#export) for the target and bundle catalog.
 
 ```console
-$ bikescore-score export <city> [OPTIONS]
+$ bikescore-bna export <city> [OPTIONS]
 ```
 
 | option | default | meaning |
@@ -115,7 +115,7 @@ outputs are read from the given run directory. Export the road-segment stress ne
 GeoJSON:
 
 ```console
-$ bikescore-score export ./aspen-colorado --target stress --format geojson --out ./gis
+$ bikescore-bna export ./aspen-colorado --target stress --format geojson --out ./gis
 wrote gis/stress.geojson
 1 file(s) → ./gis
 ```
@@ -123,7 +123,7 @@ wrote gis/stress.geojson
 …or the whole brokenspoke-analyzer deliverable set:
 
 ```console
-$ bikescore-score export ./aspen-colorado --bundle bna --out ./results
+$ bikescore-bna export ./aspen-colorado --bundle bna --out ./results
 ```
 
 ## `export-list`
@@ -132,7 +132,7 @@ List the exportable targets, their owner stage, supported formats, and the bundl
 include each.
 
 ```console
-$ bikescore-score export-list
+$ bikescore-bna export-list
 ```
 
 ## `validate`
@@ -142,7 +142,7 @@ Score a city and compare each stage output against a reference directory (the
 export). Prints a per-stage pass/fail table and exits non-zero if any stage differs.
 
 ```console
-$ bikescore-score validate <city> --reference tests/oracle/aspen [--stage stress]
+$ bikescore-bna validate <city> --reference tests/oracle/aspen [--stage stress]
 ```
 
 | option | default | meaning |
@@ -157,7 +157,7 @@ See [Validation](../development/validation.md) for the full workflow.
 
 ## Working with multiple datasets
 
-`bikescore` is a **stateless function of explicit inputs** — it remembers nothing
+`bikescore-bna` is a **stateless function of explicit inputs** — it remembers nothing
 between calls. A "dataset" is just a **directory of the five role-named files** (`osm-*`,
 `boundary-*`, `census-*`, `lodes_main-*`, `lodes_aux-*`); there is no registry. So you
 handle many datasets — or many cities — simply by **looping the same commands**, one
@@ -165,10 +165,10 @@ input directory at a time:
 
 ```console
 # same city, two input sets (e.g. this year's OSM vs a fresh re-pull)
-$ bikescore-score acquire ./aspen-colorado --out-dir ./inputs/2024
-$ bikescore-score acquire ./aspen-colorado --out-dir ./inputs/2025 --force
-$ bikescore-score score ./aspen-colorado --datasets ./inputs/2024 --out scores-2024.parquet
-$ bikescore-score score ./aspen-colorado --datasets ./inputs/2025 --out scores-2025.parquet
+$ bikescore-bna acquire ./aspen-colorado --out-dir ./inputs/2024
+$ bikescore-bna acquire ./aspen-colorado --out-dir ./inputs/2025 --force
+$ bikescore-bna score ./aspen-colorado --datasets ./inputs/2024 --out scores-2024.parquet
+$ bikescore-bna score ./aspen-colorado --datasets ./inputs/2025 --out scores-2025.parquet
 ```
 
 None of this needs any extra tooling: files are content-addressed (re-acquiring identical
@@ -179,7 +179,7 @@ From Python the loop is just as direct. `discover_inputs(dir)` turns a directory
 `{role: Path}` mapping `score_city` wants, so batching over cities is a plain `for`:
 
 ```python
-from bikescore import build_config, discover_inputs, score_city
+from bikescore_bna import build_config, discover_inputs, score_city
 
 config = build_config("default")
 for city_dir in ("./aspen-colorado", "./boulder-colorado", "./denver-colorado"):
@@ -198,8 +198,8 @@ inputs["osm"] = Path("./inputs/2025/osm-abc123.pbf")
 score_city(inputs, config)
 ```
 
-What `bikescore` deliberately does *not* do is **track** any of this: giving datasets
+What `bikescore-bna` deliberately does *not* do is **track** any of this: giving datasets
 names and IDs, versioning them, deduping them as entities, recording provenance, or
 comparing runs across them. That bookkeeping is a system-of-record concern, left to
-whatever tool wraps the library; `bikescore` itself stays a stateless function of explicit
+whatever tool wraps the library; `bikescore-bna` itself stays a stateless function of explicit
 inputs.

@@ -1,6 +1,6 @@
 # Retrospectives
 
-The durable lessons from the `bna-core → bikescore` carve-out, distilled from the
+The durable lessons from the `bna-core → bikescore-bna` carve-out, distilled from the
 Phase 38 A-series. The full per-sub-phase retrospectives live in the frozen `bna-core`
 repo (`phases/38*.md`); the ones that shape how the core is built are:
 

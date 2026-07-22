@@ -1,10 +1,10 @@
 # Python API
 
-`bikescore` scores a single city in-process, with no database and no server. The
+`bikescore-bna` scores a single city in-process, with no database and no server. The
 deliverable surface is small: build a config, hand in the input files, get scores back.
 
 ```python
-from bikescore import build_config, score_city
+from bikescore_bna import build_config, score_city
 
 config = build_config("default")
 result = score_city(inputs, config)          # inputs: {"osm": ..., "boundary": ..., ...}
@@ -41,7 +41,7 @@ nothing else.
   ...}` (see `acquire_city`, 38g).
 - **`workdir`** — directory to write stage outputs into (created if missing). Outputs
   **persist** here for reuse; there is no temp dir that gets silently discarded. Defaults
-  to a fresh timestamped folder under `./bikescore-runs/`.
+  to a fresh timestamped folder under `./bikescore-bna-runs/`.
 - **`pinned`** — `{stage_name: output_dir}` of prebuilt stage outputs. A pinned stage is
   **not** recomputed; its directory is used verbatim as the upstream for later stages
   (e.g. supply a custom network for `parse`).
@@ -56,8 +56,8 @@ recomputing.
 ## The stage contract — `StageSpec`, `PIPELINE`, `run_stage`
 
 This is the **public plugin contract**: a larger orchestration layer can consume these to
-build a content-addressed run store, a dynamic DAG, and a UI on top of `bikescore`,
-without `bikescore` ever depending on it — the dependency direction is one way, into the
+build a content-addressed run store, a dynamic DAG, and a UI on top of `bikescore-bna`,
+without `bikescore-bna` ever depending on it — the dependency direction is one way, into the
 library. `score_city` itself uses only this contract.
 
 ```python
@@ -88,7 +88,7 @@ def run_stage(stage, upstream_dirs, dataset_paths, output_dir, config) -> None: 
   cannot drift. Dataset-path *resolution* stays out of the primitive (`score_city` passes
   caller paths; an orchestrator resolves its own `file_id → path`).
 - **The metadata is the orchestration contract.** `version` and the co-located
-  `config_slice_for_stage` / `_STAGE_CONFIG_FIELDS` (in `bikescore.config`) look "dead"
+  `config_slice_for_stage` / `_STAGE_CONFIG_FIELDS` (in `bikescore_bna.config`) look "dead"
   in the library — `score_city` reads only `depends_on` / `dataset_inputs` — but they are
   the cache-buster and the fine-grained-invalidation key any caching layer relies on. They
   stay co-located with the stage that owns them (the author is the only party who knows the
@@ -107,7 +107,7 @@ content-addressed on that stage's *actual* output hash.
 ### Execution-model assumptions (A–F)
 
 The stage contract is designed so a **generic "cached DAG-of-file-stages runner"** can
-drive `bikescore` as plugin #1. Such a runner makes **zero domain assumptions** (nothing
+drive `bikescore-bna` as plugin #1. Such a runner makes **zero domain assumptions** (nothing
 about bikes / OSM / scoring) but a small fixed set of execution-model assumptions. Any
 compute library that ships `list[StageSpec]` + a config factory + (optionally) an
 `InputProvider` is orchestratable the same way, whatever its domain.
@@ -130,14 +130,14 @@ additionally needs B + complete-E + F. **Safe default for anything uncertain:
 `cacheable=False` — correctness over reuse.** You lose reuse *at that node*, never the
 ability to orchestrate.
 
-## Rule & config analysis — `bikescore.decision.analysis`
+## Rule & config analysis — `bikescore_bna.decision.analysis`
 
 Static analysis over the decision DSL (`Decision` objects + field catalogs) — no
 orchestration, database, or run store. It powers `BNAConfig.validate()` and the
-orchestration app's `bikescore rules` commands and rule-builder endpoints.
+orchestration app's `bikescore-bna rules` commands and rule-builder endpoints.
 
 ```python
-from bikescore.decision.analysis import (
+from bikescore_bna.decision.analysis import (
     validate_decision,   # static checks: unknown-field, op-type, enum-domain, duplicate-id
     find_unreachable,    # rules shadowed by an earlier, broader rule
     check_exhaustive,    # passes that can fall through with no default
@@ -153,8 +153,8 @@ Resolve-time producer/consumer and `$var:` validation — what `BNAConfig.valida
 calls to reject a config at save/resolve:
 
 ```python
-from bikescore.decision.analysis.producer_consumer import unproduced_references
-from bikescore.decision.analysis.variables import (
+from bikescore_bna.decision.analysis.producer_consumer import unproduced_references
+from bikescore_bna.decision.analysis.variables import (
     undeclared_variables, null_variables, orphan_overrides,
 )
 ```

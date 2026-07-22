@@ -30,12 +30,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bikescore import BNAConfig, ScoreResult, build_config, score_city
-from bikescore.city import CityIdentity
-from bikescore.deviations import KNOWN_DEVIATIONS
-from bikescore.pipeline import PIPELINE
-from bikescore.state_speeds import resolve_city_speed_defaults
-from bikescore.validation import compare_dataframes
+from bikescore_bna import BNAConfig, ScoreResult, build_config, score_city
+from bikescore_bna.city import CityIdentity
+from bikescore_bna.deviations import KNOWN_DEVIATIONS
+from bikescore_bna.pipeline import PIPELINE
+from bikescore_bna.state_speeds import resolve_city_speed_defaults
+from bikescore_bna.validation import compare_dataframes
 
 ORACLE = Path(__file__).resolve().parent / "oracle" / "aspen"
 # Aspen locale identity — resolves the FIPS residential speed defaults the CLI/app

@@ -6,7 +6,7 @@ This page is the reference for their structure and the terse authoring form; for
 [How stress works](../how-it-works/stress.md), and for a worked edit see the
 [Edit stress rules](../tutorial/adjust-stress-yaml.md) tutorial.
 
-The two built-in rule sets ship under `bikescore/rules/data/` and are carried into every
+The two built-in rule sets ship under `bikescore-bna/rules/data/` and are carried into every
 complete scenario:
 
 | Ruleset | File | Produces | Config field |

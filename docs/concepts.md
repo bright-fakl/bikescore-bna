@@ -1,6 +1,6 @@
 # Concepts
 
-A `bikescore` run is a pure function of three things: **inputs**, a **config**, and the
+A `bikescore-bna` run is a pure function of three things: **inputs**, a **config**, and the
 **pipeline**. Understanding these five nouns is enough to use the whole library.
 
 ## City
@@ -53,13 +53,13 @@ parse → census → jobs → attributes → segment → stress
 
 Each stage is a `StageSpec`: a name, its upstream dependencies, the dataset inputs it
 needs, a version, and a compute callable that reads files from upstream directories and
-writes files into its own output directory. `bikescore` ships `PIPELINE` as a static list;
+writes files into its own output directory. `bikescore-bna` ships `PIPELINE` as a static list;
 the same `depends_on` metadata is enough for a larger tool to re-derive a DAG from it.
 
 ## `score_city`
 
 The database-free driver: it runs every stage in `PIPELINE` order into a `workdir` you
-choose (default a timestamped folder under `./bikescore-runs/`), wiring each stage's
+choose (default a timestamped folder under `./bikescore-bna-runs/`), wiring each stage's
 inputs from prior outputs, and returns a [`ScoreResult`](reference/api.md) mapping each
 stage to its output directory. There is no SQLite, no hashing, and no run store —
 `score_city` simply runs the stages in order and leaves their outputs on disk for reuse

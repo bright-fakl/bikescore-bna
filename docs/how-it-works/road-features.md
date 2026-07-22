@@ -77,7 +77,7 @@ segment stress rules.
 
 ## Class adjustments
 
-At the end of the attributes stage, bikescore applies one further step before finishing:
+At the end of the attributes stage, bikescore-bna applies one further step before finishing:
 residential and unclassified roads that have bike infrastructure on both sides,
 multiple travel lanes, or a speed limit ≥ 30 mph are promoted to `tertiary`
 functional class. This adjustment is stored permanently in `functional_class` so
@@ -86,9 +86,9 @@ without any special-casing.
 
 ## Implementation
 
-Road attributes are computed by the **`attributes` stage** (`bikescore/stages/attributes.py`).
+Road attributes are computed by the **`attributes` stage** (`bikescore-bna/stages/attributes.py`).
 `functional_class` — including the class-adjustment promotion — is itself a built-in
-`DecisionAttribute` declared in `bikescore/data/attributes/standard-bna.yaml`,
+`DecisionAttribute` declared in `bikescore-bna/data/attributes/standard-bna.yaml`,
 as are bike infrastructure, parking, and the one-way flags. The logic lives in the
 scenario's attribute YAML, so it can be customised (e.g. to change how service roads with
 bicycle access are classified) by editing the scenario rather than Python.
@@ -106,8 +106,8 @@ SQL equivalents in brokenspoke-analyzer:
 
 ## Built-in attributes and the Attributes stage
 
-bikescore ships a set of built-in attributes (declared in
-`bikescore/data/attributes/standard-bna.yaml`) that bridge OSM tags to the columns the
+bikescore-bna ships a set of built-in attributes (declared in
+`bikescore-bna/data/attributes/standard-bna.yaml`) that bridge OSM tags to the columns the
 segment, stress, and scoring stages expect. They are **all applied by the single
 `attributes` pipeline stage**.
 
@@ -215,7 +215,7 @@ fallback for bike infrastructure width checks.
 
 ## Speed unit handling
 
-OSM `maxspeed` values appear in several formats. The SQL reference (and bikescore)
+OSM `maxspeed` values appear in several formats. The SQL reference (and bikescore-bna)
 converts all values to **mph**:
 
 | OSM value | Interpretation | Result |
@@ -233,7 +233,7 @@ Speeds rounded to the nearest 5 mph match the SQL reference exactly
 The residential city/state speed defaults live in the `city` config domain:
 
 ```python
-from bikescore.config import BNAConfig
+from bikescore_bna.config import BNAConfig
 
 config = BNAConfig.with_defaults()
 config.city.default_speed = 20        # mph; residential fallback for this city
@@ -245,14 +245,14 @@ config.city.state_default_speed = 30  # mph; used if the city default is absent
 
 The per-functional-class speed and lane defaults are the `fallback` passes of the
 `speed_parsed` / `lanes_ft` / `lanes_tf` attributes in
-`bikescore/data/attributes/standard-bna.yaml`. To change them, edit those attributes'
+`bikescore-bna/data/attributes/standard-bna.yaml`. To change them, edit those attributes'
 fallback decisions in the scenario.
 
 ## Implementation
 
 Imputation is the `fallback` passes of the `speed_parsed`,
 `lanes_ft`, `lanes_tf`, and bike-infra-width attributes, applied by the `attributes`
-stage (`bikescore/stages/attributes.py`) via `apply_attribute_fallbacks` *after* the
+stage (`bikescore-bna/stages/attributes.py`) via `apply_attribute_fallbacks` *after* the
 observed phase and the `functional_class` promotion. So `functional_class` is already set
 (and class-adjusted) when the per-class speed and lane defaults are applied.
 
@@ -272,7 +272,7 @@ brokenspoke computes road attributes as a series of in-database SQL updates
 inside `compute.attributes()`. The execution order matters because later scripts
 read columns written by earlier ones:
 
-| SQL file | bikescore equivalent |
+| SQL file | bikescore-bna equivalent |
 |---|---|
 | `prepare_tables.sql` | `stages/parse.py` (column naming during parse) |
 | `features/one_way.sql` | `one_way_car` attribute (`data/attributes/standard-bna.yaml`) |
@@ -289,27 +289,27 @@ read columns written by earlier ones:
 
 All of these are applied by the single `attributes` stage (`stages/attributes.py`), except
 the intersection attributes, which the parse stage attaches. Two SQL bugs are fixed in
-bikescore's attributes output:
+bikescore-bna's attributes output:
 
 - **[§1a Parking tag overwrite](deviations.md#1a-parking-tag-overwrite)** —
   `park.sql` silently clears valid parking data for roads tagged with
-  `parking:lane:both`. bikescore evaluates all three cases independently.
+  `parking:lane:both`. bikescore-bna evaluates all three cases independently.
 - **[§1b Opposite-direction track dead code](deviations.md#1b-opposite-direction-bike-track-dead-code)** —
   a copy-paste error in `bike_infra.sql` makes the `tf_bike_infra=track`
-  assignment for `ft` one-way roads unreachable. bikescore corrects the
+  assignment for `ft` one-way roads unreachable. bikescore-bna corrects the
   condition.
 
 ### Imputation
 
-| SQL file | bikescore equivalent |
+| SQL file | bikescore-bna equivalent |
 |---|---|
 | `features/speed_limit.sql` | `speed_parsed` attribute — fallback passes (`data/attributes/standard-bna.yaml`) |
 | `features/lanes.sql` | `lanes_ft` / `lanes_tf` attributes — fallback passes |
 | `features/width_ft.sql` | `width_parsed` attribute |
-| `speed_tables.sql` | `bikescore/data/city_fips_speed.csv` + `state_fips_speed.csv` |
+| `speed_tables.sql` | `bikescore-bna/data/city_fips_speed.csv` + `state_fips_speed.csv` |
 
 In brokenspoke, speed and lane imputation runs as part of the same `attributes()`
-call that does classification (before topology splitting). In bikescore the same work
+call that does classification (before topology splitting). In bikescore-bna the same work
 happens as the `fallback` passes at the tail of the `attributes` stage (after the observed
 phase and `functional_class` promotion), so the effect is identical — `functional_class`
 is already set when the road-type defaults are applied.

@@ -17,7 +17,7 @@ fips_code = "0803620"
 ## 2. Acquire the inputs
 
 ```console
-$ bikescore-score acquire ./aspen-colorado --out-dir ./aspen-colorado/datasets
+$ bikescore-bna acquire ./aspen-colorado --out-dir ./aspen-colorado/datasets
 ```
 
 This downloads the boundary, the Colorado OSM extract (clipped to Aspen), the 2020
@@ -28,7 +28,7 @@ content-addressed names (`osm-*.pbf`, `boundary-*.geojson`, …).
 In Python:
 
 ```python
-from bikescore import acquire_city, load_city
+from bikescore_bna import acquire_city, load_city
 city = load_city("aspen-colorado")
 inputs = acquire_city(city, "aspen-colorado/datasets")
 ```
@@ -36,14 +36,14 @@ inputs = acquire_city(city, "aspen-colorado/datasets")
 ## 3. Score
 
 ```console
-$ bikescore-score score ./aspen-colorado --scenario default --out scores.parquet
+$ bikescore-bna score ./aspen-colorado --scenario default --out scores.parquet
 scores → scores.parquet
 ```
 
 or
 
 ```python
-from bikescore import build_config, score_city
+from bikescore_bna import build_config, score_city
 result = score_city(inputs, build_config("default"))
 ```
 
@@ -66,5 +66,5 @@ print(ratings[["score_id", "score_normalized"]])   # the 0–100 city ratings
 Every intermediate stage output is also on disk under `result.workdir` for inspection —
 the routing network, the LTS segments, the destination clusters, and more. `workdir`
 persists (it is the `--out-dir` you passed, or a timestamped folder under
-`./bikescore-runs/`), so you can point `export --from` at it later without recomputing
+`./bikescore-bna-runs/`), so you can point `export --from` at it later without recomputing
 (see [Output files](../reference/output-files.md)).

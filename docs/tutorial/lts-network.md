@@ -8,13 +8,13 @@ walk-through reads that output directly.
 You only need the pipeline up to `stress`:
 
 ```console
-$ bikescore-score score ./aspen-colorado --to stress
+$ bikescore-bna score ./aspen-colorado --to stress
 ```
 
 or in Python:
 
 ```python
-from bikescore import build_config, score_city
+from bikescore_bna import build_config, score_city
 result = score_city(inputs, build_config("default"), to_stage="stress")
 ```
 

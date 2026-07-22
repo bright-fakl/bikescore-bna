@@ -12,7 +12,7 @@ Trivially green while ``PIPELINE`` is empty (Phase 38c); it becomes load-bearing
 
 from __future__ import annotations
 
-from bikescore.pipeline import PIPELINE
+from bikescore_bna.pipeline import PIPELINE
 
 
 def test_stage_names_are_unique() -> None:

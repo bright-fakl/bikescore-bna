@@ -102,7 +102,7 @@ brokenspoke computes neighborhood-level aggregates with:
 | `connectivity/overall_scores.sql` | City-level headline scores, mileage statistics |
 | `features/calculate_mileage.sql` | Total miles of each bike infrastructure type |
 
-bikescore implements the same aggregation logic in `stages/neighborhood.py`.
+bikescore-bna implements the same aggregation logic in `stages/neighborhood.py`.
 The mileage computation mirrors `calculate_mileage.sql`. The score-inputs table
 structure (132 rows, `use_*` flag columns) matches the brokenspoke schema
 exactly.

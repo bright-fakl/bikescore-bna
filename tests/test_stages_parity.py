@@ -4,10 +4,10 @@ output must match the frozen bna-core Aspen oracle.
 One ``score_city(inputs, build_config("default"), to_stage="neighborhood")`` run drives
 every stage into a temp dir (no DB, no run store); each stage's output parquet is then
 compared against its ``tests/oracle/aspen/<stage>/`` reference with the shared
-``bikescore.parity`` harness (within ``KNOWN_DEVIATIONS``). ``stress.parquet``,
+``bikescore_bna.parity`` harness (within ``KNOWN_DEVIATIONS``). ``stress.parquet``,
 ``scores.parquet`` and the three ``neighborhood`` tables are the headline gates.
 
-The same harness backs the ``bikescore-score validate`` CLI, so this test and the CLI
+The same harness backs the ``bikescore-bna validate`` CLI, so this test and the CLI
 compare identically.
 
 The Aspen **input datasets** live in the frozen bna-core workspace, not this repo, so the
@@ -23,11 +23,11 @@ from pathlib import Path
 
 import pytest
 
-from bikescore import BNAConfig, ScoreResult, build_config, score_city
-from bikescore.city import CityIdentity
-from bikescore.deviations import KNOWN_DEVIATIONS
-from bikescore.parity import STAGE_FILES, _discover_dest_cases, compare_stage
-from bikescore.state_speeds import resolve_city_speed_defaults
+from bikescore_bna import BNAConfig, ScoreResult, build_config, score_city
+from bikescore_bna.city import CityIdentity
+from bikescore_bna.deviations import KNOWN_DEVIATIONS
+from bikescore_bna.parity import STAGE_FILES, _discover_dest_cases, compare_stage
+from bikescore_bna.state_speeds import resolve_city_speed_defaults
 
 ORACLE = Path(__file__).resolve().parent / "oracle" / "aspen"
 # Aspen locale identity — resolves the FIPS residential speed defaults the CLI/app
@@ -48,7 +48,7 @@ def _aspen_inputs() -> dict[str, Path] | None:
     d = _datasets_dir()
     if d is None:
         return None
-    from bikescore import discover_inputs
+    from bikescore_bna import discover_inputs
 
     inputs = discover_inputs(d)
     return inputs if len(inputs) == 5 else None

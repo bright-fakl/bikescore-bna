@@ -1,4 +1,4 @@
-"""A7 — ``bikescore-score`` CLI: pure-helper units, command wiring, and the score gate.
+"""A7 — ``bikescore-bna`` CLI: pure-helper units, command wiring, and the score gate.
 
 The headline test (``test_score_reproduces_oracle``) is the A7 gate: the ``score``
 command on the Aspen workspace reproduces the A5 ``scores`` table identically. It skips
@@ -16,10 +16,10 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-import bikescore.cli as cli
-from bikescore.cli import _coerce, _parse_overrides, _scenario_arg, app
-from bikescore.deviations import KNOWN_DEVIATIONS
-from bikescore.validation import compare_dataframes
+import bikescore_bna.cli as cli
+from bikescore_bna.cli import _coerce, _parse_overrides, _scenario_arg, app
+from bikescore_bna.deviations import KNOWN_DEVIATIONS
+from bikescore_bna.validation import compare_dataframes
 
 runner = CliRunner()
 
@@ -207,7 +207,7 @@ def test_export_from_reuses_without_recompute(
 
     monkeypatch.setattr(cli, "score_city", _must_not_score)
     monkeypatch.setattr(cli, "_discover_inputs", lambda _d: {"osm": Path("/x")})
-    monkeypatch.setattr("bikescore.export.export_bundle", _fake_bundle)
+    monkeypatch.setattr("bikescore_bna.export.export_bundle", _fake_bundle)
 
     result = runner.invoke(
         app, ["export", str(tmp_path), "--from", str(run_dir), "--out", str(tmp_path / "out")]

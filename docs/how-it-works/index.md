@@ -1,6 +1,6 @@
 # How it works
 
-`bikescore` runs a fixed, eleven-stage pipeline. Each stage reads files from its upstream
+`bikescore-bna` runs a fixed, eleven-stage pipeline. Each stage reads files from its upstream
 stages' output directories and writes files into its own — a pure
 `(inputs, config) → files` function with no shared state.
 
@@ -24,6 +24,6 @@ parse → census → jobs → attributes → segment → stress
 | `neighborhood` | roll blocks up into 0–100 city ratings | [Neighborhood scores](neighborhood-scores.md) |
 
 The exact contents of each output file are catalogued in
-[Output files](../reference/output-files.md). Where `bikescore` intentionally diverges
+[Output files](../reference/output-files.md). Where `bikescore-bna` intentionally diverges
 from the brokenspoke-analyzer SQL reference, the difference is documented under
 [Known deviations](deviations.md).

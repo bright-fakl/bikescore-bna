@@ -1,11 +1,11 @@
 # Data acquisition
 
-`bikescore` scores a city from five raw inputs. [`acquire_city`](../reference/api.md)
+`bikescore-bna` scores a city from five raw inputs. [`acquire_city`](../reference/api.md)
 fetches all of them, database-free, and returns the `dict[str, Path]` that
 [`score_city`](../reference/api.md) consumes.
 
 ```python
-from bikescore import acquire_city, CityIdentity
+from bikescore_bna import acquire_city, CityIdentity
 
 city = CityIdentity(name="Aspen", slug="aspen-colorado",
                     region="Colorado", country="united states", fips_code="0803620")
@@ -28,13 +28,13 @@ LODES data, and the population/employment scores are correspondingly empty.
 ## The shared regional-PBF cache
 
 Geofabrik publishes OSM extracts per **state / country**, not per city. Acquisition
-downloads the regional PBF once into a shared cache (`~/.bikescore/pbf/` by default) and
+downloads the regional PBF once into a shared cache (`~/.bikescore-bna/pbf/` by default) and
 clips it to each city boundary. A second city in the same state reuses the cached
 download. Each cached PBF carries a `.meta.json` sidecar recording its source URL,
 timestamp, size, and checksum; a re-acquire is a cache hit unless you pass `force=True`.
 
 Relocate the cache by passing `pbf_cache_dir=` to `acquire_city` or setting the
-`BIKESCORE_PBF_CACHE` environment variable. `bikescore` resolves this default itself and
+`BIKESCORE_PBF_CACHE` environment variable. `bikescore-bna` resolves this default itself and
 does not read any global settings file — cache placement is left to the caller (or to
 whatever tool drives acquisition).
 

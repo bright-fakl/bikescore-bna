@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-import bikescore.pipeline as pipeline_mod
-from bikescore import BNAConfig, ScoreResult, StageSpec, run_stage, score_city
+import bikescore_bna.pipeline as pipeline_mod
+from bikescore_bna import BNAConfig, ScoreResult, StageSpec, run_stage, score_city
 
 
 def _config() -> BNAConfig:

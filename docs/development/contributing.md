@@ -1,6 +1,6 @@
 # Contributing
 
-`bikescore` is a database-free library that computes stress and access scores for one
+`bikescore-bna` is a database-free library that computes stress and access scores for one
 city. It stays a pure `(inputs, config) → files` function; anything stateful built on top
 of it — multi-city stores, run caching, a web UI — lives outside the library and is not
 part of this repo.
@@ -33,14 +33,14 @@ $ uv run pytest -m integration     # needs local cached input data
 
 ## The one load-bearing rule: import direction
 
-**`bikescore` must never depend on anything built on top of it.** The dependency direction
+**`bikescore-bna` must never depend on anything built on top of it.** The dependency direction
 is one-way, into the library — any caching layer, run store, or web UI is a consumer of
-`bikescore`, never the reverse. `tests/test_import_guard.py` scans every source and test
+`bikescore-bna`, never the reverse. `tests/test_import_guard.py` scans every source and test
 file statically and fails on any import of such an orchestration layer, so the rule holds
 even when that layer isn't installed. A violation is an architecture regression, not a
 style nit.
 
-Corollaries `bikescore` keeps to:
+Corollaries `bikescore-bna` keeps to:
 
 - **No database, workspace, or web dependencies.** Stages take file paths in and write
   files out; there is no run store to reach for.

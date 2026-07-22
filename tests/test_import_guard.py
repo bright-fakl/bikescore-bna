@@ -1,7 +1,7 @@
 """Import-direction guard — the load-bearing rule of the Phase 38 split.
 
-The scoring *core* (`bikescore`) must never import from the orchestration layer
-(`bikescore_app`). The dependency direction is app -> core, one-way. A violation here
+The scoring *core* (`bikescore-bna`) must never import from the orchestration layer
+(`bikescore`). The dependency direction is app -> core, one-way. A violation here
 is an architecture regression, not a style nit — content-addressed reuse, the web UI,
 and the run store all depend on core staying free of them.
 
@@ -18,7 +18,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SRC = _REPO_ROOT / "src"
 
 # Any of these module roots would invert the dependency direction.
-_FORBIDDEN_ROOTS = {"bikescore_app"}
+_FORBIDDEN_ROOTS = {"bikescore"}
 
 
 def _python_files(root: Path) -> list[Path]:
@@ -47,6 +47,6 @@ def test_core_never_imports_app() -> None:
         if hits:
             violations[str(path.relative_to(_REPO_ROOT))] = hits
     assert not violations, (
-        "bikescore (core) must not import the orchestration layer "
+        "bikescore-bna (core) must not import the orchestration layer "
         f"({sorted(_FORBIDDEN_ROOTS)}); found: {violations}"
     )

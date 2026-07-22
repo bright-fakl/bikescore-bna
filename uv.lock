@@ -203,7 +203,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bikescore"
+name = "bikescore-bna"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [

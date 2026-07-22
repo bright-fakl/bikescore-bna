@@ -1,11 +1,11 @@
 # Differences from brokenspoke-analyzer
 
-bikescore reimplements the [PeopleForBikes brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
+bikescore-bna reimplements the [PeopleForBikes brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
 pipeline in pure Python. The two implementations produce closely matching output across all stages, with exceptions documented here.
 
 Every deviation is one of three types:
 
-- **Bug fix** — bikescore corrects a defect in the SQL reference
+- **Bug fix** — bikescore-bna corrects a defect in the SQL reference
 - **Architectural difference** — different approach, justified and more correct
 - **Numerical artefact** — floating-point sensitivity at a threshold; irreducible
 
@@ -23,10 +23,10 @@ parking lanes. The right and left passes overwrite the `both` result
 unconditionally. A road tagged `parking:lane:both=parallel` with no separate
 `:right` or `:left` tags has its parking columns cleared by the later passes.
 
-bikescore evaluates the three cases independently and preserves the `both`
+bikescore-bna evaluates the three cases independently and preserves the `both`
 result whenever `right`/`left` would produce NULL.
 
-**Assessment:** bikescore is correct; the SQL reference silently drops valid
+**Assessment:** bikescore-bna is correct; the SQL reference silently drops valid
 parking data for roads using the `both` convention.
 
 ---
@@ -41,9 +41,9 @@ outer CASE branch, two inner conditions test `one_way_car='tf'` — a condition
 that can never be true inside that branch. This makes the `tf` opposite-track
 assignment for `ft` one-way roads unreachable.
 
-bikescore adds the correct assignment for those two conditions.
+bikescore-bna adds the correct assignment for those two conditions.
 
-**Assessment:** bikescore is correct; the dead-code branch never fires in the
+**Assessment:** bikescore-bna is correct; the dead-code branch never fires in the
 SQL reference so the column is systematically wrong for affected roads.
 
 ---
@@ -52,7 +52,7 @@ SQL reference so the column is systematically wrong for affected roads.
 
 ### 2a. Topology-ordering orphan roads
 
-**Affected rows:** a small number of isolated road ways absent from bikescore
+**Affected rows:** a small number of isolated road ways absent from bikescore_bna
 output but present in the reference  
 **Stage:** classify → segment (cascades downstream)
 
@@ -63,11 +63,11 @@ The two resulting segments each reference the other, so both pass the SQL
 one-hop orphan check — even though the whole cluster is disconnected from the
 main network.
 
-bikescore runs `classify` (dropping unclassified ways) **before** `segment`
+bikescore-bna runs `classify` (dropping unclassified ways) **before** `segment`
 (building topology). Without the deleted connecting way, the remaining ways
 are correctly identified as orphans and removed.
 
-**Assessment:** bikescore is more correct. The reference retains isolated
+**Assessment:** bikescore-bna is more correct. The reference retains isolated
 dead-end clusters as a pipeline-ordering artefact; they are unreachable from
 any census block and contribute nothing to scores.
 
@@ -93,11 +93,11 @@ shortened at the bbox edge. The `osmconvert` step is explicitly acknowledged as
 vestigial in the brokenspoke source and rarely affects anything for typical cities
 where the census-block bbox closely matches the city extent.
 
-bikescore uses `osmium extract --strategy=complete_ways`, which is identical to
-the brokenspoke default. bikescore skips the osmconvert bbox step entirely, so
+bikescore-bna uses `osmium extract --strategy=complete_ways`, which is identical to
+the brokenspoke default. bikescore-bna skips the osmconvert bbox step entirely, so
 cross-boundary roads retain their full geometry regardless of the census-block bbox.
 
-**Assessment:** bikescore's approach is more precise. The osmconvert bbox clip
+**Assessment:** bikescore-bna's approach is more precise. The osmconvert bbox clip
 has no consistent geometric relationship to the city boundary; the brokenspoke
 developer noted it was intended to be removed. Segment-length differences in
 affected roads are all attributable to this bbox truncation, not to routing or
@@ -112,9 +112,9 @@ cost logic.
 **Affected output:** row count of the parse stage  
 **Stage:** parse
 
-bikescore's parse stage produces more ways than the brokenspoke-analyzer
+bikescore-bna's parse stage produces more ways than the brokenspoke-analyzer
 reference parquet. The reference was exported after the classify stage, which
-drops unclassified roads and ways with no functional class. bikescore's parse
+drops unclassified roads and ways with no functional class. bikescore-bna's parse
 output includes all highway-tagged ways within the service buffer before any
 classification.
 
@@ -179,9 +179,9 @@ cross-boundary roads within 2,680 m of the city boundary (from step 4). Outside
 segments of cross-boundary roads whose outside nodes extended beyond the census-block
 bounding box are absent (dropped by step 2).
 
-### bikescore clipping pipeline
+### bikescore-bna clipping pipeline
 
-bikescore uses two stages:
+bikescore-bna uses two stages:
 
 **acquire — exact boundary pre-clip**
 `acquire.py` calls `pre_clip_pbf(region_pbf, boundary, buffer_m=0.0)`, which
@@ -209,7 +209,7 @@ absent from both graphs, since osmium never includes them.
 
 ### Practical consequences
 
-| Scenario | brokenspoke | bikescore |
+| Scenario | brokenspoke | bikescore-bna |
 |---|---|---|
 | Road inside city boundary | ✓ in graph | ✓ in graph |
 | Road crossing boundary, outside nodes within bbox | ✓ outside segments within 2,680 m | ✓ outside portions within 2,680 m |
@@ -219,7 +219,7 @@ absent from both graphs, since osmium never includes them.
 | POI outside boundary, within 2,680 m, outside bbox | ✗ absent (osmconvert removed) | ✗ absent |
 
 **Assessment for routing**: both pipelines include buffer-zone roads (outside
-segments of cross-boundary roads within 2,680 m of the boundary). bikescore
+segments of cross-boundary roads within 2,680 m of the boundary). bikescore-bna
 additionally retains cross-boundary roads that osmconvert would have dropped due to
 the census-block bbox restriction. For most cities this has minimal practical effect,
 since the census-block bbox closely matches the city extent.
@@ -227,13 +227,13 @@ since the census-block bbox closely matches the city extent.
 **Assessment for transit points** (formerly §5a): transit stops that are
 outside the city boundary but within 2,680 m are present in brokenspoke's
 database *only if* they also fall inside the census-block bounding box. This
-is an accidental restriction, not the stated intent. bikescore does not apply
+is an accidental restriction, not the stated intent. bikescore-bna does not apply
 this bbox restriction and includes any transit stop within 2,680 m of the boundary.
 
 **Assessment overall**: both implementations provide a routing buffer zone from
 cross-boundary road segments. brokenspoke's osmconvert bbox step may drop some
 cross-boundary roads entirely (if their outside nodes extend beyond the census-block
-bbox); bikescore avoids this by skipping the bbox step. For most cities the
+bbox); bikescore-bna avoids this by skipping the bbox step. For most cities the
 difference is minimal.
 
 ### 5a. Transit point count difference
@@ -243,14 +243,14 @@ difference is minimal.
 
 As a consequence of the clipping differences above, brokenspoke may exclude
 transit stops that are within the service radius but outside the census-block
-bounding box (e.g. ferry terminals beyond a rectangular bbox edge). bikescore
+bounding box (e.g. ferry terminals beyond a rectangular bbox edge). bikescore-bna
 clips transit stops only by `DWithin(max_trip_distance)` from the city
 boundary — the same criterion that brokenspoke's `clip_osm.sql` intends to
 apply, but without the bbox pre-filter.
 
-**Assessment:** bikescore implements the stated intent of `clip_osm.sql`.
+**Assessment:** bikescore-bna implements the stated intent of `clip_osm.sql`.
 Count differences in transit are attributable to the bbox relic in
-brokenspoke, not to a logic error in bikescore.
+brokenspoke, not to a logic error in bikescore-bna.
 
 ---
 
@@ -262,7 +262,7 @@ brokenspoke, not to a logic error in bikescore.
 **Stage:** destinations
 
 For a small number of retail POI pairs whose distance is within floating-point
-rounding of the 50 m cluster threshold, bikescore (scipy) and
+rounding of the 50 m cluster threshold, bikescore-bna (scipy) and
 brokenspoke-analyzer (PostGIS) assign them to different clusters. The
 difference is typically one or two points on a dataset of hundreds.
 
@@ -276,11 +276,11 @@ sub-1% and caused by numerical precision, not a logic error.
 
 | # | Deviation | Stage | Type | Assessment |
 |---|---|---|---|---|
-| §1a | Parking tag overwrite | classify | SQL bug fix | bikescore correct |
-| §1b | Opposite-direction track dead code | classify | SQL bug fix | bikescore correct |
-| §2a | Topology-ordering orphan roads | segment | Architecture | bikescore more correct |
-| §3a | Boundary polygon clip vs. bbox truncation | segment / graph | Architecture | bikescore more principled |
-| §5 | Clipping approaches (buffer zone, bbox relic) | parse / clip / destinations | Architecture | bikescore implements stated intent without bbox relic |
-| §5a | Transit point count | destinations | Architecture | bikescore implements intent |
+| §1a | Parking tag overwrite | classify | SQL bug fix | bikescore-bna correct |
+| §1b | Opposite-direction track dead code | classify | SQL bug fix | bikescore-bna correct |
+| §2a | Topology-ordering orphan roads | segment | Architecture | bikescore-bna more correct |
+| §3a | Boundary polygon clip vs. bbox truncation | segment / graph | Architecture | bikescore-bna more principled |
+| §5 | Clipping approaches (buffer zone, bbox relic) | parse / clip / destinations | Architecture | bikescore-bna implements stated intent without bbox relic |
+| §5a | Transit point count | destinations | Architecture | bikescore-bna implements intent |
 | §6a | Retail cluster floating-point | destinations | Numerical artefact | Irreducible, sub-1% |
 | §4a | Parse way count | parse | Comparison artefact | Not a real deviation |

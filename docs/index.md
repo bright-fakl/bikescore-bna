@@ -1,16 +1,16 @@
-# bikescore
+# bikescore-bna
 
 **Single-city bicycle network analysis as a Python library.**
 
-`bikescore` computes the [PeopleForBikes Bicycle Network Analysis](https://bikeleague.org)
+`bikescore-bna` computes the [PeopleForBikes Bicycle Network Analysis](https://bikeleague.org)
 scores — Level of Traffic Stress, low-stress connectivity, and access to destinations —
 for one city, from a plain set of input files. It is a pure-Python port of the
 PeopleForBikes [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
 (the original SQL/PostGIS implementation) that runs without a database — see
-[Why bikescore](why-bikescore.md) for the motivation and how the two differ.
+[Why bikescore-bna](why-bikescore_bna.md) for the motivation and how the two differ.
 
 ```python
-from bikescore import acquire_city, build_config, score_city, CityIdentity
+from bikescore_bna import acquire_city, build_config, score_city, CityIdentity
 
 city = CityIdentity(name="Aspen", slug="aspen-colorado",
                     region="Colorado", country="united states", fips_code="0803620")
@@ -26,8 +26,8 @@ print(result.output("neighborhood", "neighborhood.parquet"))
 Or from the command line:
 
 ```console
-$ bikescore-score acquire aspen-colorado --out-dir ./data
-$ bikescore-score score   ./aspen-colorado --scenario default --out scores.parquet
+$ bikescore-bna acquire aspen-colorado --out-dir ./data
+$ bikescore-bna score   ./aspen-colorado --scenario default --out scores.parquet
 ```
 
 ## What it produces
@@ -38,16 +38,16 @@ $ bikescore-score score   ./aspen-colorado --scenario default --out scores.parqu
 
 ## How it's built
 
-`bikescore` is a pure function: input files in, a config, scores out. It runs the
+`bikescore-bna` is a pure function: input files in, a config, scores out. It runs the
 eleven-stage pipeline in-process with no database, no server, and no persistent state —
 each stage reads files from its upstream stages and writes files of its own. The stages
 are exposed through a small, generic contract so a larger tool can drive them with
-caching, run history, or a UI, without `bikescore` ever depending on that tool. See
+caching, run history, or a UI, without `bikescore-bna` ever depending on that tool. See
 [Concepts](concepts.md) and [Extensibility](reference/extensibility.md).
 
 ## Next steps
 
-- [Why bikescore](why-bikescore.md) — the motivation and differences from brokenspoke-analyzer.
+- [Why bikescore-bna](why-bikescore_bna.md) — the motivation and differences from brokenspoke-analyzer.
 - [Installation](installation.md) — install the package and the optional `osmium` binary.
 - [Score a city](tutorial/run-a-city.md) — the end-to-end tutorial.
 - [How it works](how-it-works/index.md) — the pipeline, stage by stage.

@@ -1,6 +1,6 @@
 # Extensibility
 
-Almost everything domain-specific in bikescore is **data, not code**: how OSM tags become
+Almost everything domain-specific in bikescore-bna is **data, not code**: how OSM tags become
 road attributes, how attributes become stress, and which POIs count as destinations all
 live as decision tables on the `BNAConfig`. They share one small evaluation engine — the
 **decision DSL** — so learning it once covers stress rules, road attributes, intersection
@@ -68,7 +68,7 @@ The [destination catalog](destinations.md) is the fourth consumer of the DSL: ea
 
 ## Where extensions live
 
-There is **no plugin import hook** in `bikescore` — extensions are carried as data inside a
+There is **no plugin import hook** in `bikescore-bna` — extensions are carried as data inside a
 *scenario*. To extend, derive a new scenario from `default` and edit its rulesets,
 attribute registry, or destination catalog; `build_config(path)` loads it and
 `config.validate()` checks it. (The separate **stage** plugin contract — adding a whole new

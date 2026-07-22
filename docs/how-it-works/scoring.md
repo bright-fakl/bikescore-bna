@@ -214,8 +214,8 @@ brokenspoke computes per-block scores through a series of SQL scripts in
 
 When `python_scoring=True`, brokenspoke calls
 `compute._python_access_all()` instead — the same vectorised GROUP BY approach
-that bikescore always uses in `stages/scores.py`.
+that bikescore-bna always uses in `stages/scores.py`.
 
-There are no known deviations in the scores stage. bikescore's implementation is
+There are no known deviations in the scores stage. bikescore-bna's implementation is
 a direct translation of `compute._python_access_all()` using vectorised pandas
 operations on the connectivity DataFrame.
