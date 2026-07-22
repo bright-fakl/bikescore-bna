@@ -1,14 +1,22 @@
 # Output files
 
 `bikescore` has **no run store**. [`score_city`](api.md) runs each stage into a
-subdirectory of a temporary working directory and returns a [`ScoreResult`](api.md):
+subdirectory of a `workdir` you choose and returns a [`ScoreResult`](api.md):
 
 ```python
-result = score_city(inputs, build_config("default"))
+result = score_city(inputs, build_config("default"), workdir="runs/aspen-2026")
 result.stage_dirs        # {stage_name: Path} — one output directory per stage that ran
-result.workdir           # the temp root; the caller owns cleanup
+result.workdir           # the run root you passed (persistent, not a discarded temp dir)
 result.output("stress", "stress.parquet")   # -> Path to a specific output file
+
+# Later — reuse those outputs without recomputing (e.g. to export):
+from bikescore import ScoreResult
+result = ScoreResult.from_dir("runs/aspen-2026")
 ```
+
+Omit `workdir` and outputs land in a fresh timestamped folder under `./bikescore-runs/`
+in the current directory — still persistent and reusable, never a temp dir that is
+silently thrown away.
 
 Each stage owns its directory and writes one or more files into it. The filenames and
 schemas below are stable, and columns match brokenspoke-analyzer so the two tools stay
@@ -104,7 +112,9 @@ platform, use the [export framework](#export) below.
 The stage outputs above are parquet/pickle — the native format for hashing and reuse. To
 hand them to GIS tools or the PeopleForBikes platform, `bikescore.export` writes them to
 **GeoJSON, Shapefile, or CSV**, reprojecting geometry to WGS84 (EPSG:4326). It works
-directly off a `ScoreResult` — no run store, no database.
+directly off a `ScoreResult` — no run store, no database. Because `ScoreResult.from_dir`
+rebuilds that result from a prior run's `workdir`, export can reuse existing outputs
+instead of recomputing the pipeline.
 
 ```python
 from bikescore import score_city, export_target, export_bundle, load_city

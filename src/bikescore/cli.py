@@ -16,6 +16,7 @@ the web CLI all live in bikescore-app.
 from __future__ import annotations
 
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -26,6 +27,7 @@ from rich.table import Table
 
 from bikescore import (
     CityIdentity,
+    ScoreResult,
     acquire_city,
     build_config,
     discover_inputs,
@@ -33,6 +35,7 @@ from bikescore import (
     score_city,
 )
 from bikescore.city import load_city
+from bikescore.state_speeds import resolve_city_speed_defaults
 
 app = typer.Typer(
     add_completion=False,
@@ -117,6 +120,11 @@ def _load_override_file(path: Path) -> dict[str, Any]:
     return {str(k): v for k, v in data.items()}
 
 
+def _default_workdir(city_dir: Path) -> Path:
+    """Persistent, timestamped stage-output root for a run: ``<city>/runs/<timestamp>``."""
+    return city_dir / "runs" / datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
 def _scenario_arg(scenario: str | None) -> str | Path | None:
     """A ``--scenario`` value is a bundled name, or a path to a YAML file."""
     if scenario is None:
@@ -142,9 +150,16 @@ def score(
         Path | None,
         typer.Option("--set-file", help="YAML file of dotted-key overrides (merged under --set)."),
     ] = None,
+    out_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--out-dir",
+            help="Persist all stage outputs here (default: <city>/runs/<timestamp>).",
+        ),
+    ] = None,
     out: Annotated[
         Path | None,
-        typer.Option("--out", "-o", help="Write scores.parquet here (default: ./scores.parquet)."),
+        typer.Option("--out", "-o", help="Also copy scores.parquet to this file."),
     ] = None,
     datasets: Annotated[
         Path | None,
@@ -155,9 +170,13 @@ def score(
         typer.Option("--to", help="Stop after this stage (partial run)."),
     ] = None,
 ) -> None:
-    """Score a city end-to-end and write the block-level ``scores`` table."""
+    """Score a city end-to-end and persist every stage's output for reuse.
+
+    All stage outputs are written under ``--out-dir`` (default ``<city>/runs/<timestamp>``)
+    and kept — point ``export --from <that dir>`` at them to export without recomputing.
+    """
     city_dir = _resolve_city_dir(city)
-    _load_identity(city_dir)  # validate city.toml early
+    identity = _load_identity(city_dir)  # validate city.toml early
     datasets_dir = datasets if datasets is not None else city_dir / "datasets"
     inputs = _discover_inputs(datasets_dir)
 
@@ -165,19 +184,21 @@ def score(
     if set_file is not None:
         overrides = {**_load_override_file(set_file), **overrides}
     config = build_config(_scenario_arg(scenario), overrides)
+    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
 
+    workdir = out_dir if out_dir is not None else _default_workdir(city_dir)
     _err.print(f"[dim]scoring {city_dir.name} ({len(inputs)} inputs, scenario={scenario})…[/dim]")
-    result = score_city(inputs, config, to_stage=to_stage)
+    result = score_city(inputs, config, workdir=workdir, to_stage=to_stage)
 
-    out_path = out if out is not None else Path("scores.parquet")
     produced = result.output("scores", "scores.parquet")
     if produced.exists():
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(produced, out_path)
-        _console.print(f"[green]scores →[/green] {out_path}")
+        if out is not None:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(produced, out)
+            _console.print(f"[green]scores →[/green] {out}")
     else:
         _console.print(f"[yellow]scores not produced (stopped at {to_stage}).[/yellow]")
-    _err.print(f"[dim]all stage outputs under {result.workdir}[/dim]")
+    _console.print(f"[green]stage outputs →[/green] {result.workdir}")
 
 
 @app.command()
@@ -265,6 +286,20 @@ def export_cmd(
         Path,
         typer.Option("--out", "-o", help="Destination directory."),
     ] = Path("./export"),
+    from_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--from",
+            help="Reuse stage outputs from a prior `score`/run dir instead of recomputing.",
+        ),
+    ] = None,
+    workdir: Annotated[
+        Path | None,
+        typer.Option(
+            "--workdir",
+            help="Where to persist stage outputs when computing (default: <city>/runs/<timestamp>).",
+        ),
+    ] = None,
     scenario: Annotated[
         str | None,
         typer.Option("--scenario", "-s", help="Bundled scenario name or path to a YAML file."),
@@ -282,11 +317,12 @@ def export_cmd(
         typer.Option("--datasets", help="Raw-input directory (default: <city>/datasets)."),
     ] = None,
 ) -> None:
-    """Run the pipeline for a city and export outputs to GeoJSON/Shapefile/CSV.
+    """Export a city's pipeline outputs to GeoJSON/Shapefile/CSV.
 
     Export a single target (``--target stress --format geojson``) or a whole bundle
-    (``--bundle bna``, the default). The full pipeline runs first — the core keeps no run
-    store to reuse — then the requested outputs are written under ``--out``.
+    (``--bundle bna``, the default). Pass ``--from <run dir>`` to reuse a prior ``score``
+    run's outputs without recomputing; otherwise the pipeline runs first, persisting stage
+    outputs under ``--workdir`` (default ``<city>/runs/<timestamp>``).
     """
     from bikescore.export import export_bundle, export_target
 
@@ -305,9 +341,19 @@ def export_cmd(
     if set_file is not None:
         overrides = {**_load_override_file(set_file), **overrides}
     config = build_config(_scenario_arg(scenario), overrides)
+    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
 
-    _err.print(f"[dim]scoring {city_dir.name} for export (scenario={scenario})…[/dim]")
-    result = score_city(inputs, config)
+    if from_dir is not None:
+        try:
+            result = ScoreResult.from_dir(from_dir)
+        except FileNotFoundError as exc:
+            _err.print(f"[red]{exc}[/red]")
+            raise typer.Exit(2) from exc
+        _err.print(f"[dim]reusing stage outputs under {from_dir} (no recompute)…[/dim]")
+    else:
+        run_dir = workdir if workdir is not None else _default_workdir(city_dir)
+        _err.print(f"[dim]scoring {city_dir.name} for export (scenario={scenario})…[/dim]")
+        result = score_city(inputs, config, workdir=run_dir)
 
     try:
         if target is not None:
@@ -325,7 +371,8 @@ def export_cmd(
     for path in written:
         _console.print(f"[green]wrote[/green] {path}")
     _console.print(f"[green]{len(written)} file(s) →[/green] {out}")
-    _err.print(f"[dim]all stage outputs under {result.workdir}[/dim]")
+    if from_dir is None:
+        _console.print(f"[green]stage outputs →[/green] {result.workdir}")
 
 
 @app.command("export-list")
@@ -368,6 +415,10 @@ def validate_cmd(
         Path | None,
         typer.Option("--datasets", help="Raw-input directory (default: <city>/datasets)."),
     ] = None,
+    workdir: Annotated[
+        Path | None,
+        typer.Option("--workdir", help="Where to persist stage outputs (default: <city>/runs/<timestamp>)."),
+    ] = None,
     scenario: Annotated[
         str | None,
         typer.Option("--scenario", "-s", help="Bundled scenario name or path to a YAML file."),
@@ -395,7 +446,7 @@ def validate_cmd(
     from bikescore.parity import validate_result
 
     city_dir = _resolve_city_dir(city)
-    _load_identity(city_dir)
+    identity = _load_identity(city_dir)
     if not reference.is_dir():
         _err.print(f"[red]No reference directory:[/red] {reference}")
         raise typer.Exit(2)
@@ -406,10 +457,12 @@ def validate_cmd(
     if set_file is not None:
         overrides = {**_load_override_file(set_file), **overrides}
     config = build_config(_scenario_arg(scenario), overrides)
+    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
 
+    run_dir = workdir if workdir is not None else _default_workdir(city_dir)
     _err.print(f"[dim]scoring {city_dir.name} for validation (scenario={scenario})…[/dim]")
     try:
-        result = score_city(inputs, config, to_stage=stage) if stage else score_city(inputs, config)
+        result = score_city(inputs, config, workdir=run_dir, to_stage=stage or None)
     except ValueError as exc:
         _err.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from exc

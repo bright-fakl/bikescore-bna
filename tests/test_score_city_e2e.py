@@ -31,11 +31,17 @@ import pandas as pd
 import pytest
 
 from bikescore import BNAConfig, ScoreResult, build_config, score_city
+from bikescore.city import CityIdentity
 from bikescore.deviations import KNOWN_DEVIATIONS
 from bikescore.pipeline import PIPELINE
+from bikescore.state_speeds import resolve_city_speed_defaults
 from bikescore.validation import compare_dataframes
 
 ORACLE = Path(__file__).resolve().parent / "oracle" / "aspen"
+# Aspen locale identity — resolves the FIPS residential speed defaults the CLI/app
+# apply, so the direct-``score_city`` parity run matches the (FIPS-corrected) oracle.
+_ASPEN = CityIdentity(name="Aspen", slug="aspen-colorado", region="Colorado",
+                     country="united states", fips_code="0803620")
 _DEFAULT_DATASETS = Path(
     "/home/fabian/Projects/RideScore/BNA/bna-core-projects/aspen-colorado/datasets"
 )
@@ -88,6 +94,7 @@ def full_run() -> ScoreResult:
     inputs = _aspen_inputs()
     assert inputs is not None  # guarded by pytestmark
     config: BNAConfig = build_config("default")
+    resolve_city_speed_defaults(config, _ASPEN)
     return score_city(inputs, config)
 
 

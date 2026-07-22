@@ -64,5 +64,7 @@ print(ratings[["score_id", "score_normalized"]])   # the 0–100 city ratings
   [Neighborhood scores](../how-it-works/neighborhood-scores.md).
 
 Every intermediate stage output is also on disk under `result.workdir` for inspection —
-the routing network, the LTS segments, the destination clusters, and more (see
-[Output files](../reference/output-files.md)).
+the routing network, the LTS segments, the destination clusters, and more. `workdir`
+persists (it is the `--out-dir` you passed, or a timestamped folder under
+`./bikescore-runs/`), so you can point `export --from` at it later without recomputing
+(see [Output files](../reference/output-files.md)).

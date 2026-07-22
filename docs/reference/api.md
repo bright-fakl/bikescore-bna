@@ -27,25 +27,31 @@ list_bundled_scenarios() -> list[str]
 
 ```python
 score_city(inputs: dict[str, Path], config: BNAConfig,
-           *, pinned: dict[str, Path] | None = None,
+           *, workdir: Path | None = None,
+           pinned: dict[str, Path] | None = None,
            to_stage: str | None = None) -> ScoreResult
 ```
 
-Runs every stage in `PIPELINE` order into a fresh temp directory — no SQLite, no
-content-addressed hashing, no run store, no `graphlib`. It is the minimal driver: the
-stages, in order, and nothing else.
+Runs every stage in `PIPELINE` order into `workdir` — no SQLite, no content-addressed
+hashing, no run store, no `graphlib`. It is the minimal driver: the stages, in order, and
+nothing else.
 
 - **`inputs`** — dataset-input name → file path. Must cover every `dataset_inputs` name
   the stages declare, e.g. `{"osm": ..., "boundary": ..., "census": ..., "lodes_main":
   ...}` (see `acquire_city`, 38g).
+- **`workdir`** — directory to write stage outputs into (created if missing). Outputs
+  **persist** here for reuse; there is no temp dir that gets silently discarded. Defaults
+  to a fresh timestamped folder under `./bikescore-runs/`.
 - **`pinned`** — `{stage_name: output_dir}` of prebuilt stage outputs. A pinned stage is
   **not** recomputed; its directory is used verbatim as the upstream for later stages
   (e.g. supply a custom network for `parse`).
 - **`to_stage`** — stop after this stage (inclusive) for a partial run.
 
 `ScoreResult` carries `stage_dirs: dict[str, Path]` (every stage that ran or was pinned →
-its output directory), `workdir: Path` (the temp root the caller owns cleanup of), and a
-convenience `result.output(stage, filename) -> Path`.
+its output directory), `workdir: Path` (the run root), and a convenience
+`result.output(stage, filename) -> Path`. `ScoreResult.from_dir(workdir)` rebuilds a
+result from a folder a prior run wrote to, so export/validate can reuse it without
+recomputing.
 
 ## The stage contract — `StageSpec`, `PIPELINE`, `run_stage`
 

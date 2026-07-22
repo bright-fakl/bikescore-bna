@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,5 +45,24 @@ def load_city(city_dir: Path) -> CityIdentity:
         fips_code=city_data.get("fips_code") or city_data.get("fips"),
         timezone=city_data.get("timezone"),
     )
+
+
+def save_city(city_dir: Path, city: CityIdentity) -> None:
+    """Write CityIdentity to city.toml atomically."""
+    city_dir.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f'name = "{city.name}"\n',
+        f'slug = "{city.slug}"\n',
+        f'region = "{city.region}"\n',
+        f'country = "{city.country}"\n',
+    ]
+    if city.fips_code is not None:
+        lines.append(f'fips_code = "{city.fips_code}"\n')
+    if city.timezone is not None:
+        lines.append(f'timezone = "{city.timezone}"\n')
+    toml_path = city_dir / "city.toml"
+    tmp = toml_path.with_suffix(".toml.tmp")
+    tmp.write_text("".join(lines), encoding="utf-8")
+    os.replace(tmp, toml_path)
 
 

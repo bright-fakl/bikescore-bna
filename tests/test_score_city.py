@@ -36,29 +36,29 @@ def _touch_stage(name: str, depends_on: tuple[str, ...] = ()) -> StageSpec:
     )
 
 
-def test_empty_pipeline_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_empty_pipeline_runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """An empty PIPELINE scores without error."""
     monkeypatch.setattr(pipeline_mod, "PIPELINE", [])
-    result = score_city({}, _config())
+    result = score_city({}, _config(), workdir=tmp_path / "run")
     assert isinstance(result, ScoreResult)
     assert result.stage_dirs == {}
     assert result.workdir.is_dir()
 
 
-def test_stages_run_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Each stage runs into its own temp dir; downstream sees the upstream dir."""
+def test_stages_run_in_order(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Each stage runs into its own dir under workdir; downstream sees the upstream dir."""
     monkeypatch.setattr(
         pipeline_mod,
         "PIPELINE",
         [_touch_stage("a"), _touch_stage("b", depends_on=("a",))],
     )
-    result = score_city({}, _config())
+    result = score_city({}, _config(), workdir=tmp_path / "run")
     assert set(result.stage_dirs) == {"a", "b"}
     assert (result.stage_dirs["a"] / "a.txt").read_text() == "ok"
     assert (result.stage_dirs["b"] / "b.txt").read_text() == "ok"
 
 
-def test_pinned_dirs_pass_through(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pinned_dirs_pass_through(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A pinned stage is used verbatim and never recomputed."""
     monkeypatch.setattr(
         pipeline_mod,
@@ -66,21 +66,47 @@ def test_pinned_dirs_pass_through(monkeypatch: pytest.MonkeyPatch) -> None:
         [_touch_stage("a"), _touch_stage("b", depends_on=("a",))],
     )
     pinned = {"a": Path("/some/prebuilt/a")}
-    result = score_city({}, _config(), pinned=pinned)
+    result = score_city({}, _config(), workdir=tmp_path / "run", pinned=pinned)
     assert result.stage_dirs["a"] == Path("/some/prebuilt/a")
     # b consumed the pinned dir as its upstream and still ran.
     assert (result.stage_dirs["b"] / "b.txt").read_text() == "ok"
     assert pinned == {"a": Path("/some/prebuilt/a")}  # caller dict untouched
 
 
-def test_to_stage_stops_after(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_to_stage_stops_after(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         pipeline_mod,
         "PIPELINE",
         [_touch_stage("a"), _touch_stage("b", depends_on=("a",))],
     )
-    result = score_city({}, _config(), to_stage="a")
+    result = score_city({}, _config(), workdir=tmp_path / "run", to_stage="a")
     assert set(result.stage_dirs) == {"a"}
+
+
+def test_workdir_persists_and_from_dir_reuses(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A given workdir persists stage outputs; ``from_dir`` rebuilds the result from it."""
+    monkeypatch.setattr(
+        pipeline_mod,
+        "PIPELINE",
+        [_touch_stage("a"), _touch_stage("b", depends_on=("a",))],
+    )
+    workdir = tmp_path / "run"
+    score_city({}, _config(), workdir=workdir)
+    # Outputs are on disk under the caller-chosen dir, not a discarded temp dir.
+    assert (workdir / "a" / "a.txt").read_text() == "ok"
+    assert (workdir / "b" / "b.txt").read_text() == "ok"
+
+    reused = ScoreResult.from_dir(workdir)
+    assert reused.workdir == workdir
+    assert set(reused.stage_dirs) == {"a", "b"}
+    assert reused.stage_dirs["a"] == workdir / "a"
+
+
+def test_from_dir_no_stage_dirs_raises(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="No pipeline stage output directories"):
+        ScoreResult.from_dir(tmp_path)
 
 
 def test_unknown_to_stage_raises() -> None:

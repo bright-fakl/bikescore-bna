@@ -110,10 +110,14 @@ def test_acquire_command_prints_table(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_score_reproduces_oracle(tmp_path: Path) -> None:
     out = tmp_path / "scores.parquet"
     result = runner.invoke(
-        app, ["score", str(_WORKSPACE), "--scenario", "default", "--out", str(out)]
+        app,
+        ["score", str(_WORKSPACE), "--scenario", "default",
+         "--out-dir", str(tmp_path / "run"), "--out", str(out)],
     )
     assert result.exit_code == 0, result.stdout
     assert out.exists()
+    # stage outputs persist under the chosen --out-dir (not a discarded temp dir).
+    assert (tmp_path / "run" / "scores" / "scores.parquet").exists()
 
     computed = pd.read_parquet(out)
     reference = pd.read_parquet(ORACLE / "scores" / "scores.parquet")
@@ -179,6 +183,50 @@ def test_set_file_merges_and_inline_wins(tmp_path: Path, monkeypatch: pytest.Mon
     assert result.exit_code == 0, result.stdout
     assert seen["thr"] == 3          # from the file
     assert seen["people"] == 99      # inline --set overrides the file
+
+
+def test_export_from_reuses_without_recompute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`export --from <dir>` rebuilds a ScoreResult from disk and never runs the pipeline."""
+    (tmp_path / "city.toml").write_text(
+        'name = "A"\nslug = "a"\nregion = "Colorado"\n'
+        'country = "united states"\nfips_code = "0803620"\n'
+    )
+    run_dir = tmp_path / "run"
+    (run_dir / "scores").mkdir(parents=True)  # a recognizable stage subdir
+
+    def _must_not_score(*_a: object, **_k: object) -> object:
+        raise AssertionError("score_city must not run when --from is given")
+
+    seen: dict[str, object] = {}
+
+    def _fake_bundle(result: object, *_a: object, **_k: object) -> list[Path]:
+        seen["stage_dirs"] = set(result.stage_dirs)  # type: ignore[attr-defined]
+        return [tmp_path / "out" / "bna.geojson"]
+
+    monkeypatch.setattr(cli, "score_city", _must_not_score)
+    monkeypatch.setattr(cli, "_discover_inputs", lambda _d: {"osm": Path("/x")})
+    monkeypatch.setattr("bikescore.export.export_bundle", _fake_bundle)
+
+    result = runner.invoke(
+        app, ["export", str(tmp_path), "--from", str(run_dir), "--out", str(tmp_path / "out")]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert seen["stage_dirs"] == {"scores"}
+
+
+def test_export_from_empty_dir_exits_2(tmp_path: Path) -> None:
+    (tmp_path / "city.toml").write_text(
+        'name = "A"\nslug = "a"\nregion = "Colorado"\n'
+        'country = "united states"\nfips_code = "0803620"\n'
+    )
+    (tmp_path / "datasets").mkdir()
+    (tmp_path / "datasets" / "city.osm.pbf").write_bytes(b"")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result = runner.invoke(app, ["export", str(tmp_path), "--from", str(empty)])
+    assert result.exit_code == 2
 
 
 def test_set_file_missing_exits_2(tmp_path: Path) -> None:

@@ -23,9 +23,13 @@ $ bikescore-score score <city> [OPTIONS]
 | `--scenario`, `-s` | `default` | bundled scenario name, or a path to a scenario YAML |
 | `--set k=v` | — | config override (repeatable), e.g. `--set city.default_speed=40` |
 | `--set-file` | — | YAML file of `key: value` overrides (merged under `--set`) |
-| `--out`, `-o` | `scores.parquet` | where to write the scores table |
+| `--out-dir` | `<city>/runs/<timestamp>` | persist **all** stage outputs here (reusable by `export --from`) |
+| `--out`, `-o` | — | also copy `scores.parquet` to this file |
 | `--datasets` | `<city>/datasets` | directory holding the raw inputs |
 | `--to` | — | stop after this stage (partial run) |
+
+Stage outputs are kept under `--out-dir` (never a discarded temp dir), so a later
+`export --from <that dir>` reuses them without recomputing.
 
 Raw inputs are discovered in the datasets directory by name (`osm-*.pbf`,
 `boundary-*.geojson`, `census-*.parquet`, `lodes_main-*.csv`, `lodes_aux-*.csv`) — the
@@ -83,10 +87,11 @@ YAML file; keep policy in the scenario and put per-run scalar tweaks in a separa
 
 ## `export`
 
-Run the pipeline for a city and export outputs to GeoJSON / Shapefile / CSV. The full
-pipeline runs first — `bikescore` keeps no run store to reuse — then the requested outputs are
-written under `--out`. See [Output files → Export](output-files.md#export) for the target
-and bundle catalog.
+Export a city's pipeline outputs to GeoJSON / Shapefile / CSV. Pass `--from <run dir>` to
+reuse a prior `score` run's outputs without recomputing; otherwise the pipeline runs first,
+persisting stage outputs under `--workdir` (default `<city>/runs/<timestamp>`). The
+requested outputs are written under `--out`. See
+[Output files → Export](output-files.md#export) for the target and bundle catalog.
 
 ```console
 $ bikescore-score export <city> [OPTIONS]
@@ -98,12 +103,15 @@ $ bikescore-score export <city> [OPTIONS]
 | `--bundle`, `-b` | `bna` (if no `--target`) | export a named bundle of targets |
 | `--format`, `-f` | — | `geojson` \| `shapefile` \| `csv` (with `--target`) |
 | `--out`, `-o` | `./export` | destination directory |
+| `--from` | — | reuse stage outputs from a prior `score` run dir (no recompute) |
+| `--workdir` | `<city>/runs/<timestamp>` | where to persist stage outputs when computing |
 | `--scenario`, `-s` | `default` | bundled scenario name or a scenario YAML path |
 | `--set k=v` | — | config override (repeatable) |
 | `--set-file` | — | YAML file of `key: value` overrides (merged under `--set`) |
 | `--datasets` | `<city>/datasets` | directory holding the raw inputs |
 
-Pass either `--target` or `--bundle`, not both. Export the road-segment stress network as
+Pass either `--target` or `--bundle`, not both. With `--from`, the pipeline is not run —
+outputs are read from the given run directory. Export the road-segment stress network as
 GeoJSON:
 
 ```console

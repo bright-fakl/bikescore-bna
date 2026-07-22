@@ -9,15 +9,16 @@ metadata (index §2.1). One source of truth for deps; a stdlib drift-guard test 
 ``PIPELINE`` is a valid topological order of that graph.
 
 ``score_city`` is the database-free driver — no SQLite, no content-addressed hashing,
-no run store, no ``graphlib``. It runs each stage into a temp directory in ``PIPELINE``
-order, tracking ``name -> output_dir``. ``PIPELINE`` is empty in Phase 38c and filled by
-38d (parse→stress) and 38e (graph→neighborhood).
+no run store, no ``graphlib``. It runs each stage into a caller-chosen ``workdir`` in
+``PIPELINE`` order, tracking ``name -> output_dir``, so outputs are *persistent and
+reusable* (not thrown away in a temp dir). ``ScoreResult.from_dir`` rebuilds a result
+from such a folder, letting export/validate reuse a prior run without recomputing.
 """
 
 from __future__ import annotations
 
-import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -63,8 +64,8 @@ class ScoreResult:
         stage_dirs: Maps each stage name that ran (or was ``pinned``) to the directory
             holding its output files. The final ``scores`` / ``neighborhood`` outputs
             are read from here by callers and the parity gate.
-        workdir: The temp root under which every *computed* stage directory lives.
-            ``pinned`` directories may lie outside it. The caller owns cleanup.
+        workdir: The root under which every *computed* stage directory lives.
+            ``pinned`` directories may lie outside it.
     """
 
     stage_dirs: dict[str, Path]
@@ -74,19 +75,44 @@ class ScoreResult:
         """Path to ``filename`` inside ``stage``'s output directory."""
         return self.stage_dirs[stage] / filename
 
+    @classmethod
+    def from_dir(cls, workdir: Path) -> ScoreResult:
+        """Rebuild a result from a folder ``score_city`` previously wrote to.
+
+        Scans ``workdir`` for subdirectories named after pipeline stages and maps each
+        present one to its directory. This is how export/validate reuse a prior run's
+        outputs without recomputing the pipeline.
+
+        Raises:
+            FileNotFoundError: ``workdir`` holds no recognizable stage subdirectory.
+        """
+        workdir = Path(workdir)
+        stage_dirs = {
+            stage.name: workdir / stage.name
+            for stage in PIPELINE
+            if (workdir / stage.name).is_dir()
+        }
+        if not stage_dirs:
+            raise FileNotFoundError(
+                f"No pipeline stage output directories found under {workdir}. Expected "
+                f"subdirectories named after stages (e.g. 'scores', 'stress')."
+            )
+        return cls(stage_dirs=stage_dirs, workdir=workdir)
+
 
 def score_city(
     inputs: dict[str, Path],
     config: BNAConfig,
     *,
+    workdir: Path | None = None,
     pinned: dict[str, Path] | None = None,
     to_stage: str | None = None,
 ) -> ScoreResult:
     """Score one city end-to-end with no database, workspace, or run store.
 
-    Runs every stage in ``PIPELINE`` order into a fresh temp directory, resolving each
-    stage's upstream directories from prior outputs (and ``pinned`` overrides) and its
-    dataset inputs from ``inputs``. This is the engine-lite replacement for the app's
+    Runs every stage in ``PIPELINE`` order into ``workdir``, resolving each stage's
+    upstream directories from prior outputs (and ``pinned`` overrides) and its dataset
+    inputs from ``inputs``. This is the engine-lite replacement for the app's
     ``PipelineEngine.execute_run`` minus SQLite recording, hashing, and JSON run logs.
 
     Args:
@@ -94,6 +120,10 @@ def score_city(
             ``{"osm": ..., "boundary": ..., "census": ..., "lodes_main": ...}``). Must
             cover every ``dataset_inputs`` name the stages that run declare.
         config: The effective ``BNAConfig`` (typically ``build_config(...)``).
+        workdir: Directory to write stage outputs into (created if missing). Outputs
+            persist here for reuse (e.g. by ``export`` via ``ScoreResult.from_dir``).
+            Defaults to a fresh timestamped folder under ``./bikescore-runs`` in the
+            current directory — never a temp dir that gets silently discarded.
         pinned: Optional ``{stage_name: output_dir}`` of prebuilt stage outputs. A
             pinned stage is *not* recomputed; its directory is used verbatim as the
             upstream for later stages (e.g. supply a custom network for ``parse``).
@@ -101,7 +131,7 @@ def score_city(
 
     Returns:
         A :class:`ScoreResult` mapping every stage that ran (or was pinned) to its
-        output directory, plus the temp ``workdir`` root.
+        output directory, plus the ``workdir`` root.
 
     Raises:
         ValueError: ``to_stage`` is not a stage in ``PIPELINE``.
@@ -114,7 +144,11 @@ def score_city(
             f"to_stage={to_stage!r} is not a pipeline stage (known: {sorted(stage_names)})"
         )
 
-    workdir = Path(tempfile.mkdtemp(prefix="bikescore-"))
+    if workdir is None:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        workdir = Path.cwd() / "bikescore-runs" / stamp
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
     stage_dirs: dict[str, Path] = {}
 
     for stage in PIPELINE:

@@ -58,10 +58,12 @@ the same `depends_on` metadata is enough for a larger tool to re-derive a DAG fr
 
 ## `score_city`
 
-The database-free driver: it runs every stage in `PIPELINE` order into a temp directory,
-wiring each stage's inputs from prior outputs, and returns a
-[`ScoreResult`](reference/api.md) mapping each stage to its output directory. There is no
-SQLite, no hashing, and no run store — `score_city` simply runs the stages in order.
+The database-free driver: it runs every stage in `PIPELINE` order into a `workdir` you
+choose (default a timestamped folder under `./bikescore-runs/`), wiring each stage's
+inputs from prior outputs, and returns a [`ScoreResult`](reference/api.md) mapping each
+stage to its output directory. There is no SQLite, no hashing, and no run store —
+`score_city` simply runs the stages in order and leaves their outputs on disk for reuse
+(`ScoreResult.from_dir` rebuilds a result from such a folder).
 
 ```python
 result = score_city(inputs, config)

@@ -23,3 +23,6 @@ site/
 # port against the frozen bna-core oracle, removed at cutover. NONE of it is committed
 # (data, manifest, regeneration script, or its checksum test). See tests/oracle/README.md.
 tests/oracle/
+
+# Ephemeral CLI/library run outputs (score_city default workdir)
+bikescore-runs/
