@@ -1,6 +1,8 @@
 site_name: bikescore-bna
 site_description: A pure-Python, database-free port of the PeopleForBikes bicycle network analysis
 repo_url: https://github.com/bright-fakl/bikescore-bna
+site_url: https://bright-fakl.github.io/bikescore-bna/
+use_directory_urls: true
 docs_dir: docs
 
 theme:
