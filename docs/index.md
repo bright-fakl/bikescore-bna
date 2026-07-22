@@ -7,7 +7,7 @@ scores — Level of Traffic Stress, low-stress connectivity, and access to desti
 for one city, from a plain set of input files. It is a pure-Python port of the
 PeopleForBikes [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
 (the original SQL/PostGIS implementation) that runs without a database — see
-[Why bikescore-bna](why-bikescore_bna.md) for the motivation and how the two differ.
+[Why bikescore-bna](why-bikescore.md) for the motivation and how the two differ.
 
 ```python
 from bikescore_bna import acquire_city, build_config, score_city, CityIdentity
@@ -47,7 +47,7 @@ caching, run history, or a UI, without `bikescore-bna` ever depending on that to
 
 ## Next steps
 
-- [Why bikescore-bna](why-bikescore_bna.md) — the motivation and differences from brokenspoke-analyzer.
+- [Why bikescore-bna](why-bikescore.md) — the motivation and differences from brokenspoke-analyzer.
 - [Installation](installation.md) — install the package and the optional `osmium` binary.
 - [Score a city](tutorial/run-a-city.md) — the end-to-end tutorial.
 - [How it works](how-it-works/index.md) — the pipeline, stage by stage.
