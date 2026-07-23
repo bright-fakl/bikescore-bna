@@ -184,9 +184,6 @@ reference uses correlated subqueries (O(blocks × pairs) per destination type, w
 takes minutes for large cities). The Python implementation is O(pairs) total — a
 single pass through the connectivity table.
 
-The reference implementation is in
-`brokenspoke_analyzer/core/compute.py:_python_access_all()`.
-
 ## Comparison with brokenspoke-analyzer
 
 brokenspoke computes per-block scores through a series of SQL scripts in
@@ -212,10 +209,7 @@ brokenspoke computes per-block scores through a series of SQL scripts in
 | `access_universities.sql` | University access score |
 | `access_overall.sql` | Per-block overall score combining all categories |
 
-When `python_scoring=True`, brokenspoke calls
-`compute._python_access_all()` instead — the same vectorised GROUP BY approach
-that bikescore-bna always uses in `stages/scores.py`.
-
-There are no known deviations in the scores stage. bikescore-bna's implementation is
-a direct translation of `compute._python_access_all()` using vectorised pandas
-operations on the connectivity DataFrame.
+bikescore-bna reimplements this SQL scoring logic in `stages/scores.py`, replacing
+the per-destination correlated subqueries with a single vectorised pandas GROUP BY
+over the connectivity DataFrame. This is an architectural difference that produces
+equivalent results; there are no known deviations in the scores stage.

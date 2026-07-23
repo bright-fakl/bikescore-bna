@@ -103,34 +103,28 @@ comfortable.
 
 ## Comparison with brokenspoke-analyzer
 
-brokenspoke implements connectivity in two layers. The outer layer uses SQL to
-find reachable roads; the inner layer uses scipy for direct block-to-block
-distances. The SQL files are:
+brokenspoke computes connectivity entirely in SQL/PostGIS. pgRouting builds the
+reachable-roads tables, and a single SQL script then joins them into block-to-block
+connectivity. The SQL files are:
 
 | SQL file | What it does |
 |---|---|
-| `connectivity/reachable_roads_high_stress_prep.sql` | Prepare high-stress Dijkstra run |
-| `connectivity/reachable_roads_high_stress_calc.sql` | Run pgRouting Dijkstra (high stress) |
-| `connectivity/reachable_roads_high_stress_cleanup.sql` | Post-process high-stress results |
-| `connectivity/reachable_roads_low_stress_prep.sql` | Prepare low-stress Dijkstra run |
-| `connectivity/reachable_roads_low_stress_calc.sql` | Run pgRouting Dijkstra (low stress) |
-| `connectivity/reachable_roads_low_stress_cleanup.sql` | Post-process low-stress results |
-| `connectivity/connected_census_blocks_create.sql` | Create connected-blocks table |
-| `connectivity/connected_census_blocks.sql` | Populate block-to-block connectivity |
-| `connectivity/connected_census_blocks_insert.sql` | Insert connectivity rows |
-| `connectivity/connected_census_blocks_finalize.sql` | Apply 1.25× ratio and adjacent-block flags |
 | `connectivity/census_blocks.sql` | Associate roads with census blocks |
+| `connectivity/reachable_roads_high_stress_prep.sql` | Prepare high-stress reachability run |
+| `connectivity/reachable_roads_high_stress_calc.sql` | Run `pgr_drivingDistance` (high stress) |
+| `connectivity/reachable_roads_high_stress_cleanup.sql` | Post-process high-stress results |
+| `connectivity/reachable_roads_low_stress_prep.sql` | Prepare low-stress reachability run |
+| `connectivity/reachable_roads_low_stress_calc.sql` | Run `pgr_drivingDistance` (low stress) |
+| `connectivity/reachable_roads_low_stress_cleanup.sql` | Post-process low-stress results |
+| `connectivity/connected_census_blocks.sql` | Join reachable roads into block pairs, apply the 1.25× ratio and adjacent-block flags, and count reachable blocks per source |
 
-When `python_scoring=True`, brokenspoke calls `compute._scipy_direct_connected_census_blocks()`
-instead of the SQL connected-blocks scripts — the same scipy-based Dijkstra
-approach that bikescore-bna always uses.
+bikescore-bna replaces this SQL connectivity with a single vectorised scipy Dijkstra
+traversal per source block in `stages/connectivity.py`. This is an architectural
+difference — brokenspoke stays in PostGIS, bikescore-bna computes the block-to-block
+table in Python — but it produces equivalent results; there are no known deviations in
+the connectivity stage.
 
-bikescore-bna replaces the SQL path entirely with vectorised scipy Dijkstra in
-`stages/connectivity.py`, which is equivalent to brokenspoke's
-`_scipy_direct_connected_census_blocks()` path. There are no known deviations
-in the connectivity stage.
-
-The main structural difference is performance: brokenspoke's default pgRouting
-path runs O(blocks × pairs) SQL queries; the scipy path (and therefore bikescore-bna)
-runs a single graph traversal per source block, which is substantially faster on
-large cities.
+The practical motivation is performance: brokenspoke's `connected_census_blocks.sql`
+evaluates correlated subqueries over the reachable-roads tables for every candidate block
+pair, whereas bikescore-bna runs one graph traversal per source block, which is
+substantially faster on large cities.

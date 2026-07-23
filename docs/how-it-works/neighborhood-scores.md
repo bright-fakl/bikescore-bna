@@ -95,8 +95,6 @@ brokenspoke computes neighborhood-level aggregates with:
 
 | SQL file | What it does |
 |---|---|
-| `connectivity/connected_census_blocks_direct_create.sql` | Create table for direct (adjacent) connections |
-| `connectivity/connected_census_blocks_direct_finalize.sql` | Populate adjacent-block rows |
 | `connectivity/category_scores.sql` | Population-weighted category and overall scores |
 | `connectivity/score_inputs.sql` | 132-row score-inputs table (percentiles, averages) |
 | `connectivity/overall_scores.sql` | City-level headline scores, mileage statistics |
