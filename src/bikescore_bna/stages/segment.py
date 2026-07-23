@@ -38,6 +38,9 @@ def _compute_node_usage(ways_df: gpd.GeoDataFrame) -> dict[int, int]:
     """Count how many ways each node appears in (mirrors osm2pgrouting numsOfUse)."""
     usage: dict[int, int] = defaultdict(int)
     for node_ids in ways_df["node_ids"]:
+        # Parquet round-trips list columns as numpy arrays, not python lists.
+        if isinstance(node_ids, np.ndarray):
+            node_ids = node_ids.tolist()
         if isinstance(node_ids, list):
             for nid in node_ids:
                 usage[int(nid)] += 1
