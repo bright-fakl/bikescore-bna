@@ -9,6 +9,11 @@ config:
     min_bbox_length: 3300
     min_path_length: 4800
     output_srid: null
+  boundary:
+    fill_holes: false
+    keep_largest_part: false
+    clip_shape: null
+    clip_size_m: null
   cache:
     cache_dir: cache
   city:

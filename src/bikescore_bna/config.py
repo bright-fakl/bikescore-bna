@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     pass
@@ -278,6 +278,52 @@ class CacheConfig:
     cache_dir: Path = field(default_factory=lambda: Path("./cache"))
 
 
+@dataclass
+class BoundaryConfig:
+    """Analysis-boundary transforms applied once, at acquire time.
+
+    ``prepare_boundary`` (bikescore_bna.boundary) runs these — in the fixed order
+    keep_largest_part → fill_holes → clip — on the fetched city boundary to produce
+    the *analysis* boundary that ``parse`` / ``census`` / ``segment`` consume. With no
+    field set the transform is identity and the analysis boundary is byte-for-byte the
+    fetched one (oracle parity preserved).
+
+    Phase 1 exposes only subsetting/hole-filling transforms — every one either shrinks
+    the extent or fills interior holes, so it stays within the already-downloaded
+    regional data (no re-acquire). Extent-expanding transforms (convex_hull,
+    override_geometry, network_buffer_m) and multi-region ``extra_regions`` arrive with
+    Phase 2.
+    """
+
+    fill_holes: bool = False
+    """Rebuild each polygon from its exterior ring, absorbing interior enclaves
+    (holes) completely. Predictable, not radius-dependent."""
+
+    keep_largest_part: bool = False
+    """Drop detached exclaves/islands, keeping only the largest polygon of a
+    MultiPolygon boundary."""
+
+    clip_shape: Literal["box", "circle"] | None = None
+    """Region-restrict shape, centered on the boundary centroid and intersected with
+    the real boundary. ``None`` disables clipping. Requires ``clip_size_m``."""
+
+    clip_size_m: float | None = None
+    """Clip size in metres: box side length / circle diameter. Required when
+    ``clip_shape`` is set; must be a positive number."""
+
+    def validate(self) -> None:
+        """Reject an inconsistent clip spec (shape and size must be set together)."""
+        if (self.clip_shape is None) != (self.clip_size_m is None):
+            raise ConfigValidationError(
+                "boundary.clip_shape and boundary.clip_size_m must be set together "
+                f"(got clip_shape={self.clip_shape!r}, clip_size_m={self.clip_size_m!r})."
+            )
+        if self.clip_size_m is not None and self.clip_size_m <= 0:
+            raise ConfigValidationError(
+                f"boundary.clip_size_m must be positive (got {self.clip_size_m!r})."
+            )
+
+
 # ── Top-level config ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -375,6 +421,7 @@ class BNAConfig:
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
+    boundary: BoundaryConfig = field(default_factory=BoundaryConfig)
 
     def validate(self, *, runtime: bool = False) -> None:
         """Validate cross-config constraints.
@@ -384,6 +431,7 @@ class BNAConfig:
         chokepoint where the city is layered in and the resolved value is known.
         A city-free scenario save uses the default (``runtime=False``)."""
         self.scoring.validate()
+        self.boundary.validate()
         validate_scoring_categories(self.scoring, self.destinations)
         # The intersection-stress model (rules/providers.py) hard-codes the four BNA
         # attribute columns. Until it is generalized (Decision 4 Phase 2), the active

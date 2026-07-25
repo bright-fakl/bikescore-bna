@@ -40,7 +40,7 @@ class ConfigResolverError(Exception):
 # Config namespaces that map directly to a BNAConfig sub-config attribute.
 _STAGE_NAMESPACES: frozenset[str] = frozenset({
     "city", "imputation", "stress", "graph",
-    "connectivity", "scoring", "export", "cache",
+    "connectivity", "scoring", "export", "cache", "boundary",
 })
 
 # Top-level scalar BNAConfig fields, addressed under the ``globals`` namespace.

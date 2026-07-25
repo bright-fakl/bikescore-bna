@@ -705,6 +705,13 @@ def _build_intersections(ctx: ExportContext) -> gpd.GeoDataFrame:
     return _build_intersections_gdf(nodes_df, segments_df)
 
 
+def _boundaries_equal(a: gpd.GeoDataFrame, b: gpd.GeoDataFrame) -> bool:
+    """True when two boundary GeoDataFrames describe the same dissolved geometry."""
+    from shapely.ops import unary_union
+
+    return bool(unary_union(a.geometry).equals(unary_union(b.geometry)))
+
+
 @_target("boundary", "parse", requires=["dataset:boundary"], kind="geo")
 def _build_boundary(ctx: ExportContext) -> gpd.GeoDataFrame:
     import geopandas as gpd
@@ -713,6 +720,41 @@ def _build_boundary(ctx: ExportContext) -> gpd.GeoDataFrame:
     if path is None:
         raise StageOutputNotFoundError("dataset 'boundary' not supplied for this run")
     return _to_wgs84(gpd.read_file(path))
+
+
+@_target("excluded_blocks", "census", requires=["census"], kind="geo")
+def _build_excluded_blocks(ctx: ExportContext) -> gpd.GeoDataFrame:
+    """Census blocks dropped from scoring (water / outside), with a ``block_class`` code.
+
+    Inert layer — scoring never sees it. Raises :class:`StageOutputNotFoundError` (so
+    bundles skip it cleanly) when the census stage excluded nothing.
+    """
+    return ctx.stage_df("census", "excluded_census_blocks.parquet", geo=True)
+
+
+@_target("analysis_boundary", "parse", requires=["dataset:analysis_boundary"], kind="geo")
+def _build_analysis_boundary(ctx: ExportContext) -> gpd.GeoDataFrame:
+    """The transformed analysis boundary — emitted only when it differs from the original.
+
+    Raises :class:`StageOutputNotFoundError` (skipped cleanly) when no boundary
+    transform ran, i.e. the analysis boundary is the fetched one.
+    """
+    import geopandas as gpd
+
+    analysis = ctx.dataset_path("analysis_boundary")
+    original = ctx.dataset_path("boundary")
+    if analysis is None:
+        raise StageOutputNotFoundError("dataset 'analysis_boundary' not supplied for this run")
+    # Identity acquisition reuses the original file — nothing distinct to export.
+    if original is not None and Path(analysis) == Path(original):
+        raise StageOutputNotFoundError("analysis boundary identical to boundary")
+
+    gdf = _to_wgs84(gpd.read_file(analysis))
+    if original is not None:
+        orig = _to_wgs84(gpd.read_file(original))
+        if _boundaries_equal(gdf, orig):
+            raise StageOutputNotFoundError("analysis boundary identical to boundary")
+    return gdf
 
 
 @_target(
@@ -770,6 +812,8 @@ _register_bundle(ExportBundle(
         "stress": "neighborhood_ways",
         "intersections": "neighborhood_ways_intersections",
         "boundary": "neighborhood_boundary",
+        "analysis_boundary": "neighborhood_analysis_boundary",
+        "excluded_blocks": "neighborhood_excluded_blocks",
         "destinations": "neighborhood_{key}",
         "connectivity": "neighborhood_connected_census_blocks",
         "neighborhood_scores": "neighborhood_overall_scores",
@@ -782,6 +826,8 @@ _register_bundle(ExportBundle(
         "stress": ["geojson", "shapefile"],
         "intersections": ["geojson"],
         "boundary": ["geojson"],
+        "analysis_boundary": ["geojson"],
+        "excluded_blocks": ["geojson", "shapefile"],
         "destinations": ["geojson"],
         "connectivity": ["csv"],
         "neighborhood_scores": ["csv"],

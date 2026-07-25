@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     import geopandas as gpd
 
     from bikescore_bna.city import CityIdentity
+    from bikescore_bna.config import BNAConfig
 
 _logger = logging.getLogger("bikescore-bna")
 
@@ -438,11 +439,19 @@ class InputProvider(Protocol):
     """
 
     def acquire(
-        self, city: CityIdentity, out_dir: Path, *, force: bool = False,
+        self,
+        city: CityIdentity,
+        out_dir: Path,
+        *,
+        force: bool = False,
+        config: BNAConfig | None = None,
     ) -> dict[str, Path]:
-        """Produce ``{"osm", "boundary", "census", "lodes_main", "lodes_aux"}`` -> path.
+        """Produce ``{"osm", "boundary", "analysis_boundary", "census", "lodes_main", "lodes_aux"}`` -> path.
 
-        US-only inputs (``census`` / ``lodes_*``) may be omitted for non-US cities.
+        ``analysis_boundary`` is the boundary after ``prepare_boundary`` transforms
+        (from ``config.boundary``); it equals ``boundary`` when no transform is
+        configured (or ``config`` is ``None``). US-only inputs (``census`` /
+        ``lodes_*``) may be omitted for non-US cities.
         """
         ...
 
@@ -465,7 +474,12 @@ class UsCensusLodesProvider:
         )
 
     def acquire(
-        self, city: CityIdentity, out_dir: Path, *, force: bool = False,
+        self,
+        city: CityIdentity,
+        out_dir: Path,
+        *,
+        force: bool = False,
+        config: BNAConfig | None = None,
     ) -> dict[str, Path]:
         import tempfile
 
@@ -475,7 +489,7 @@ class UsCensusLodesProvider:
 
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        config = self._config(out_dir, force)
+        ac = self._config(out_dir, force)
         result: dict[str, Path] = {}
 
         with tempfile.TemporaryDirectory() as _tmp:
@@ -486,28 +500,44 @@ class UsCensusLodesProvider:
             boundary_gdf = gpd.read_file(boundary_tmp)
             if boundary_gdf.crs is None or boundary_gdf.crs.to_epsg() != 4326:
                 boundary_gdf = boundary_gdf.to_crs(epsg=4326)
-            result["boundary"] = self._store(config, "boundary", boundary_tmp, ".geojson")
+            result["boundary"] = self._store(ac, "boundary", boundary_tmp, ".geojson")
+
+            # Analysis boundary: prepare_boundary transforms; identity (same file)
+            # when no transform is configured, preserving oracle parity.
+            analysis_gdf = boundary_gdf
+            if config is not None:
+                from bikescore_bna.boundary import prepare_boundary
+
+                analysis_gdf = prepare_boundary(boundary_gdf, config)
+            if analysis_gdf is boundary_gdf:
+                result["analysis_boundary"] = result["boundary"]
+            else:
+                analysis_tmp = tmp_dir / "analysis_boundary.geojson"
+                analysis_gdf.to_file(analysis_tmp, driver="GeoJSON")
+                result["analysis_boundary"] = self._store(
+                    ac, "analysis_boundary", analysis_tmp, ".geojson"
+                )
 
             # ── Regional PBF → clip to boundary ───────────────────────────
-            region_pbf, _ = _download_state_pbf(city, config)
-            clipped_tmp = pre_clip_pbf(region_pbf, boundary_gdf, 0.0, tmp_dir)
-            result["osm"] = self._store(config, "osm", clipped_tmp, ".pbf")
+            region_pbf, _ = _download_state_pbf(city, ac)
+            clipped_tmp = pre_clip_pbf(region_pbf, analysis_gdf, 0.0, tmp_dir)
+            result["osm"] = self._store(ac, "osm", clipped_tmp, ".pbf")
 
             # ── Census + LODES (US only) ──────────────────────────────────
             if city.is_us and city.fips_code is not None:
                 state_fips = city.fips_code[:2]
-                census_tmp = _download_census_blocks_tmp(state_fips, boundary_gdf, tmp_dir)
+                census_tmp = _download_census_blocks_tmp(state_fips, analysis_gdf, tmp_dir)
                 if census_tmp is not None:
-                    result["census"] = self._store(config, "census", census_tmp, ".parquet")
+                    result["census"] = self._store(ac, "census", census_tmp, ".parquet")
 
                 state_abbr = _state_abbr_from_fips(state_fips)
                 if state_abbr:
                     year = _lodes_latest_year(state_abbr, _LODES_BASE)
                     main_tmp, aux_tmp = _download_lodes_tmp(state_abbr, year, tmp_dir)
                     if main_tmp is not None:
-                        result["lodes_main"] = self._store(config, "lodes_main", main_tmp, ".csv")
+                        result["lodes_main"] = self._store(ac, "lodes_main", main_tmp, ".csv")
                     if aux_tmp is not None:
-                        result["lodes_aux"] = self._store(config, "lodes_aux", aux_tmp, ".csv")
+                        result["lodes_aux"] = self._store(ac, "lodes_aux", aux_tmp, ".csv")
 
         return result
 
@@ -528,6 +558,7 @@ def acquire_city(
     pbf_cache_dir: Path | None = None,
     force: bool = False,
     provider: InputProvider | None = None,
+    config: BNAConfig | None = None,
 ) -> dict[str, Path]:
     """Acquire the raw inputs ``score_city`` needs for *city*, DB-free.
 
@@ -538,19 +569,23 @@ def acquire_city(
             Ignored when a custom *provider* is supplied.
         force: Re-download the regional PBF even on a cache hit.
         provider: Override the default US census/LODES :class:`InputProvider`.
+        config: Effective :class:`BNAConfig`. When set, ``config.boundary`` transforms
+            are applied at acquire time to produce the ``analysis_boundary`` input.
+            ``None`` (default) means no transform — analysis boundary == boundary.
 
     Returns:
         ``{name: path}`` covering ``osm`` / ``boundary`` and (US cities) ``census`` /
         ``lodes_main`` / ``lodes_aux`` — the ``inputs`` dict ``score_city`` expects.
     """
     prov = provider if provider is not None else UsCensusLodesProvider(pbf_cache_dir)
-    return prov.acquire(city, Path(out_dir), force=force)
+    return prov.acquire(city, Path(out_dir), force=force, config=config)
 
 
 # Role -> glob for the content-addressed files acquire_city writes into a directory.
 _INPUT_GLOBS: dict[str, str] = {
     "osm": "osm-*.pbf",
     "boundary": "boundary-*.geojson",
+    "analysis_boundary": "analysis_boundary-*.geojson",
     "census": "census-*.parquet",
     "lodes_main": "lodes_main-*.csv",
     "lodes_aux": "lodes_aux-*.csv",
@@ -574,4 +609,9 @@ def discover_inputs(datasets_dir: Path | str) -> dict[str, Path]:
         hits = sorted(d.glob(pattern))
         if hits:
             inputs[role] = hits[0]
+    # Identity acquisitions write no separate analysis-boundary file; the analysis
+    # boundary is then the fetched boundary itself. Fall back so stages that consume
+    # ``analysis_boundary`` always resolve.
+    if "analysis_boundary" not in inputs and "boundary" in inputs:
+        inputs["analysis_boundary"] = inputs["boundary"]
     return inputs

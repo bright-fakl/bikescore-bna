@@ -84,7 +84,12 @@ def test_acquire_command_prints_table(tmp_path: Path, monkeypatch: pytest.Monkey
     captured: dict[str, object] = {}
 
     def _fake_acquire(
-        city: object, out_dir: object, *, pbf_cache_dir: object = None, force: bool = False
+        city: object,
+        out_dir: object,
+        *,
+        pbf_cache_dir: object = None,
+        force: bool = False,
+        config: object = None,
     ) -> dict[str, Path]:
         captured["city"] = city.name  # type: ignore[attr-defined]
         captured["pbf_cache_dir"] = pbf_cache_dir
@@ -249,7 +254,12 @@ def test_acquire_default_out_dir_is_city_datasets(
     seen: dict[str, object] = {}
 
     def _fake_acquire(
-        city: object, out_dir: object, *, pbf_cache_dir: object = None, force: bool = False
+        city: object,
+        out_dir: object,
+        *,
+        pbf_cache_dir: object = None,
+        force: bool = False,
+        config: object = None,
     ) -> dict[str, Path]:
         seen["out_dir"] = Path(out_dir)  # type: ignore[arg-type]
         return {"osm": Path("/x/osm.pbf")}

@@ -204,6 +204,18 @@ def score(
 @app.command()
 def acquire(
     city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
+    scenario: Annotated[
+        str | None,
+        typer.Option("--scenario", "-s", help="Bundled scenario name or path to a YAML file."),
+    ] = "default",
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="Config override key=value (repeatable)."),
+    ] = None,
+    set_file: Annotated[
+        Path | None,
+        typer.Option("--set-file", help="YAML file of dotted-key overrides (merged under --set)."),
+    ] = None,
     out_dir: Annotated[
         Path | None,
         typer.Option("--out-dir", help="Directory to write inputs into (default: <city>/datasets)."),
@@ -219,12 +231,23 @@ def acquire(
         bool, typer.Option("--force", help="Re-download the regional PBF even if cached."),
     ] = False,
 ) -> None:
-    """Download the raw inputs (OSM, boundary, census, LODES) for a city."""
+    """Download the raw inputs (OSM, boundary, census, LODES) for a city.
+
+    ``config.boundary`` transforms (from the scenario / ``--set``) are applied at
+    acquire time to produce the ``analysis_boundary`` input; with no transform it
+    equals the fetched boundary.
+    """
     city_dir = _resolve_city_dir(city)
     identity = _load_identity(city_dir)
+    overrides = _parse_overrides(set_ or [])
+    if set_file is not None:
+        overrides = {**_load_override_file(set_file), **overrides}
+    config = build_config(_scenario_arg(scenario), overrides)
     out_dir = out_dir if out_dir is not None else city_dir / "datasets"
     _err.print(f"[dim]acquiring inputs for {identity.name} → {out_dir}…[/dim]")
-    files = acquire_city(identity, out_dir, pbf_cache_dir=pbf_cache_dir, force=force)
+    files = acquire_city(
+        identity, out_dir, pbf_cache_dir=pbf_cache_dir, force=force, config=config
+    )
 
     table = Table("input", "path")
     for role in sorted(files):

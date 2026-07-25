@@ -572,7 +572,11 @@ def _run(input_paths: dict[str, Path], output_dir: Path, config: BNAConfig) -> N
     import geopandas as gpd
 
     osm_path = Path(input_paths["dataset:osm"])
-    boundary = gpd.read_file(input_paths["dataset:boundary"]).to_crs(epsg=4326)
+    boundary_path = (
+        input_paths.get("dataset:analysis_boundary")
+        or input_paths["dataset:boundary"]
+    )
+    boundary = gpd.read_file(boundary_path).to_crs(epsg=4326)
 
     attribute_tags = (
         sorted(config.attributes.extra_osm_tags() - set(BASE_WAY_TAGS))
@@ -596,7 +600,7 @@ def _run(input_paths: dict[str, Path], output_dir: Path, config: BNAConfig) -> N
 PARSE = StageSpec(
     name="parse",
     depends_on=(),
-    dataset_inputs=("osm", "boundary"),
+    dataset_inputs=("osm", "analysis_boundary"),
     version=STAGE_VERSION,
     run=_run,
 )
