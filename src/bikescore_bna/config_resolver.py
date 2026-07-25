@@ -40,13 +40,13 @@ class ConfigResolverError(Exception):
 # Config namespaces that map directly to a BNAConfig sub-config attribute.
 _STAGE_NAMESPACES: frozenset[str] = frozenset({
     "city", "imputation", "stress", "graph",
-    "connectivity", "scoring", "export", "cache",
+    "connectivity", "scoring", "export", "cache", "boundary",
 })
 
 # Top-level scalar BNAConfig fields, addressed under the ``globals`` namespace.
 _GLOBAL_FIELDS: frozenset[str] = frozenset({
     "max_trip_distance", "block_road_buffer", "block_road_min_length",
-    "output_srid", "min_path_length", "min_bbox_length",
+    "output_srid", "min_path_length", "min_bbox_length", "extra_regions",
 })
 
 # Ruleset-typed entries (value is a decision document → Decision), per namespace.
@@ -457,10 +457,25 @@ def _set_global(config: BNAConfig, key: str, val: Any) -> None:
 
 
 def _coerce(value: Any) -> Any:
-    """Coerce a ``--set`` string into bool/int/float, leaving non-strings untouched."""
+    """Coerce a ``--set`` string into bool/int/float/list, leaving non-strings untouched.
+
+    A bracketed value (``[a, b]``) is parsed as a list via YAML flow syntax, so list-valued
+    config fields such as ``extra_regions`` can be set inline (``--set extra_regions=[md,va]``
+    or with quotes). ``--set`` still cannot reach rules/definitions — that guard is the
+    namespace whitelist in :func:`_apply_set`, not this scalar coercion.
+    """
     if not isinstance(value, str):
         return value
-    low = value.strip().lower()
+    s = value.strip()
+    if s.startswith("[") and s.endswith("]"):
+        import yaml
+        try:
+            parsed = yaml.safe_load(s)
+        except yaml.YAMLError:
+            parsed = None
+        if isinstance(parsed, list):
+            return parsed
+    low = s.lower()
     if low in ("true", "false"):
         return low == "true"
     try:

@@ -176,6 +176,8 @@ def _aspen_inputs() -> dict[str, Path] | None:
         if not hits:
             return None
         inputs[name] = hits[0]
+    if "boundary" in inputs and "analysis_boundary" not in inputs:
+        inputs["analysis_boundary"] = inputs["boundary"]
     return inputs
 
 

@@ -134,7 +134,12 @@ class _StubProvider:
         self.calls: list[tuple[CityIdentity, Path, bool]] = []
 
     def acquire(
-        self, city: CityIdentity, out_dir: Path, *, force: bool = False,
+        self,
+        city: CityIdentity,
+        out_dir: Path,
+        *,
+        force: bool = False,
+        config: object | None = None,
     ) -> dict[str, Path]:
         self.calls.append((city, out_dir, force))
         return dict(self._files)
@@ -171,6 +176,7 @@ def _aspen_inputs() -> dict[str, Path] | None:
         if not hits:
             return None
         inputs[name] = hits[0]
+    inputs["analysis_boundary"] = inputs["boundary"]  # identity acquisition
     return inputs
 
 
@@ -218,6 +224,8 @@ def test_discover_inputs_maps_roles(tmp_path: Path) -> None:
     (d / "scores.parquet").write_bytes(b"x")
 
     inputs = discover_inputs(d)
-    assert set(inputs) == {"osm", "boundary", "census"}  # lodes absent → omitted
+    # analysis_boundary falls back to the boundary file when none was written separately.
+    assert set(inputs) == {"osm", "boundary", "analysis_boundary", "census"}
+    assert inputs["analysis_boundary"] == inputs["boundary"]
     assert inputs["osm"].name == "osm-abc123.pbf"
     assert discover_inputs(tmp_path / "nonexistent") == {}

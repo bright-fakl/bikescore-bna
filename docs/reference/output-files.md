@@ -44,6 +44,7 @@ platform, use the [export framework](#export) below.
 | File | Contents | Key |
 |---|---|---|
 | `census_blocks.parquet` | Census blocks (GeoParquet) with population/housing and the clipped city geometry | `geoid20` |
+| `excluded_census_blocks.parquet` | Blocks **dropped** from scoring — water-only or mostly-outside the boundary — with a `block_class` code (`water` / `outside`) plus `geoid20, pop20, aland20, awater20`. Written **only when some block is excluded**; inert (never scored), so it just makes the drops distinguishable from missing data | `geoid20` |
 
 ### `jobs/`
 
@@ -143,8 +144,10 @@ available, and the CLI's [`export-list`](cli.md#export-list) prints the table.
 | `stress` | stress | geojson, shapefile, csv | road segments with LTS — the headline network layer |
 | `ways_raw`, `nodes` | parse | geojson, shapefile, csv | raw ways / nodes |
 | `intersections` | parse | geojson, shapefile, csv | intersection points with `legs`, `signalized`, `stops`, … |
-| `boundary` | parse | geojson, shapefile, csv | the city boundary (reads the raw `boundary` input) |
+| `boundary` | parse | geojson, shapefile, csv | the original fetched city boundary (reads the raw `boundary` input) |
+| `analysis_boundary` | parse | geojson | the transformed [analysis boundary](config.md#boundary-transforms); emitted **only when a `boundary` transform changed it** |
 | `census_blocks` | census | geojson, shapefile, csv | plain census blocks |
+| `excluded_blocks` | census | geojson, shapefile | blocks dropped from scoring, carrying `block_class` (`water` / `outside`); skipped cleanly when nothing was excluded |
 | `neighborhood_census_blocks` | census | geojson, shapefile, csv | blocks joined to their `scores` |
 | `ways_classified` | attributes | geojson, shapefile, csv | the resolved attribute layer |
 | `segments`, `trails` | segment | geojson, shapefile, csv | split segments / off-network paths |
@@ -162,4 +165,6 @@ into one directory, each target under its platform filename (`neighborhood_ways.
 `neighborhood_census_blocks.geojson`, `neighborhood_connected_census_blocks.csv`,
 `residential_speed_limit.csv`, …) plus a self-describing `README.md`. `neighborhood_census_blocks`
 and `stress` are **required** (a missing input raises); optional targets whose inputs are
-absent are skipped with a warning.
+absent are skipped with a warning. The `neighborhood_analysis_boundary` and
+`neighborhood_excluded_blocks` layers ride along too — each skipped cleanly when a run has
+no transformed boundary / no excluded blocks, so default bundles are unchanged.

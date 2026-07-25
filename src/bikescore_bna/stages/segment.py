@@ -599,7 +599,9 @@ def _run(input_paths: dict[str, Path], output_dir: Path, config: BNAConfig) -> N
     nodes_df = pd.read_parquet(parse_dir / "nodes.parquet")
     all_ways_df = gpd.read_parquet(parse_dir / "ways_raw.parquet")
 
-    boundary_path = input_paths.get("dataset:boundary")
+    boundary_path = input_paths.get("dataset:analysis_boundary") or input_paths.get(
+        "dataset:boundary"
+    )
     boundary = gpd.read_file(boundary_path).to_crs(epsg=4326) if boundary_path else None
 
     seg_result, trails_df = segment(ways_df, nodes_df, config, all_ways_df=all_ways_df, boundary=boundary)
@@ -613,7 +615,7 @@ def _run(input_paths: dict[str, Path], output_dir: Path, config: BNAConfig) -> N
 SEGMENT = StageSpec(
     name="segment",
     depends_on=("attributes", "parse"),
-    dataset_inputs=("boundary",),
+    dataset_inputs=("analysis_boundary",),
     version=STAGE_VERSION,
     run=_run,
 )
