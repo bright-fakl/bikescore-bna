@@ -46,16 +46,47 @@ scores → scores.parquet
 Download the raw inputs (OSM, boundary, and — for US cities — census + LODES).
 
 ```console
-$ bikescore-bna acquire <city> [--out-dir DIR] [--pbf-cache-dir DIR] [--force]
+$ bikescore-bna acquire <city> [OPTIONS]
 ```
 
-`--out-dir` is where the content-addressed input files land — it **defaults to
-`<city>/datasets/`**, the same place `score`/`export` read from, so `acquire <city>`
-then `score <city>` works with no flags. Point it elsewhere to keep several input sets
-side by side (see [Working with multiple datasets](#working-with-multiple-datasets));
-`--pbf-cache-dir` relocates the shared regional-PBF cache (default `$BIKESCORE_PBF_CACHE`
-or `~/.bikescore-bna/pbf`); `--force` re-downloads the shared regional PBF even on a cache
-hit. See [Data acquisition](../how-it-works/data-acquisition.md).
+| option | default | meaning |
+|---|---|---|
+| `--scenario`, `-s` | `default` | scenario supplying the [`boundary`](config.md#boundary-transforms) transforms + `extra_regions` applied at acquire time |
+| `--set k=v` | — | config override (repeatable), e.g. `--set boundary.fill_holes=true` |
+| `--set-file` | — | YAML file of `key: value` overrides (merged under `--set`) |
+| `--out-dir` | `<city>/datasets` | where the content-addressed input files land |
+| `--pbf-cache-dir` | `$BIKESCORE_PBF_CACHE` or `~/.bikescore-bna/pbf` | shared regional-PBF cache dir |
+| `--force` | off | re-download the regional PBF even on a cache hit |
+| `--dry-run` | off | report region coverage only — no OSM/census/LODES download |
+
+`--out-dir` **defaults to `<city>/datasets/`**, the same place `score`/`export` read from,
+so `acquire <city>` then `score <city>` works with no flags. Point it elsewhere to keep
+several input sets side by side (see [Working with multiple datasets](#working-with-multiple-datasets)).
+See [Data acquisition](../how-it-works/data-acquisition.md).
+
+Any [`boundary`](config.md#boundary-transforms) transforms in the scenario / `--set` are
+applied here, at acquire time, to produce the `analysis_boundary` input; with no transform
+it equals the fetched boundary.
+
+### `acquire --dry-run`
+
+When a boundary transform (or a non-zero `network_buffer_m`) can push the analysis extent
+past the fetched region, acquire needs the neighbouring regions in `extra_regions`.
+`--dry-run` fetches only the boundary and the Geofabrik index — no OSM/census/LODES
+download — and prints the home / would-acquire / needed / missing regions so you can size
+`extra_regions` before a full run:
+
+```console
+$ bikescore-bna acquire ./washington-dc --set boundary.convex_hull=true --dry-run
+field           regions
+home            district-of-columbia
+would acquire   district-of-columbia
+extent needs    district-of-columbia, maryland, virginia
+missing         maryland, virginia
+The extent needs regions not being acquired. Add them: --set extra_regions='[…]'
+```
+
+It exits non-zero (`3`) when regions are missing, so it doubles as a coverage guard in CI.
 
 ## `scenarios`
 
