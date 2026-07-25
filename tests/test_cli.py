@@ -163,12 +163,16 @@ def test_set_file_merges_and_inline_wins(tmp_path: Path, monkeypatch: pytest.Mon
         'name = "A"\nslug = "a"\nregion = "Colorado"\n'
         'country = "united states"\nfips_code = "0803620"\n'
     )
-    (tmp_path / "of.yaml").write_text("graph.low_stress_threshold: 3\nscoring.people: 42\n")
+    # Valid overrides only — the CLI now validates the effective config (weights sum to
+    # 100, threshold ≤ stress levels, …), so use fields whose values stay valid.
+    (tmp_path / "of.yaml").write_text(
+        "graph.low_stress_threshold: 2\nconnectivity.batches_per_worker: 42\n"
+    )
     seen: dict[str, object] = {}
 
     def _fake_score(inputs: object, config: object, **kw: object) -> object:
         seen["thr"] = config.graph.low_stress_threshold  # type: ignore[attr-defined]
-        seen["people"] = config.scoring.people  # type: ignore[attr-defined]
+        seen["batches"] = config.connectivity.batches_per_worker  # type: ignore[attr-defined]
 
         class _R:
             workdir = "/x"
@@ -183,11 +187,11 @@ def test_set_file_merges_and_inline_wins(tmp_path: Path, monkeypatch: pytest.Mon
     result = runner.invoke(
         app,
         ["score", str(tmp_path), "--set-file", str(tmp_path / "of.yaml"),
-         "--set", "scoring.people=99"],
+         "--set", "graph.low_stress_threshold=3"],
     )
     assert result.exit_code == 0, result.stdout
-    assert seen["thr"] == 3          # from the file
-    assert seen["people"] == 99      # inline --set overrides the file
+    assert seen["batches"] == 42     # from the file
+    assert seen["thr"] == 3          # inline --set overrides the file
 
 
 def test_export_from_reuses_without_recompute(

@@ -26,6 +26,7 @@ from rich.console import Console
 from rich.table import Table
 
 from bikescore_bna import (
+    BNAConfig,
     CityIdentity,
     ScoreResult,
     acquire_city,
@@ -135,6 +136,35 @@ def _scenario_arg(scenario: str | None) -> str | Path | None:
     return scenario
 
 
+def _resolve_config(
+    scenario: str | None,
+    set_: list[str] | None,
+    set_file: Path | None,
+    identity: CityIdentity,
+) -> BNAConfig:
+    """Resolve, city-layer, and validate the effective config — the CLI's one chokepoint.
+
+    Every run-facing command goes through here: merge ``--set`` / ``--set-file`` overrides,
+    build the scenario config, layer the city's locale speed defaults, then **fail fast**
+    on any invalid value (negative buffer, scoring weights ≠ 100, unpaired clip shape/size,
+    thresholds above the stress-level count, undeclared/required variables, …) with a clean
+    message and exit 2 — rather than surfacing a traceback deep inside a stage. ``build_config``
+    itself stays validation-free so scenario authoring/serialization can hold partial configs;
+    validation belongs at the run boundary, which is here.
+    """
+    overrides = _parse_overrides(set_ or [])
+    if set_file is not None:
+        overrides = {**_load_override_file(set_file), **overrides}
+    config = build_config(_scenario_arg(scenario), overrides)
+    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
+    try:
+        config.validate(runtime=True)
+    except ValueError as exc:  # ConfigValidationError is a ValueError subclass
+        _err.print(f"[red]invalid config:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    return config
+
+
 @app.command()
 def score(
     city: Annotated[str, typer.Argument(help="Path to a city directory (containing city.toml).")],
@@ -180,11 +210,7 @@ def score(
     datasets_dir = datasets if datasets is not None else city_dir / "datasets"
     inputs = _discover_inputs(datasets_dir)
 
-    overrides = _parse_overrides(set_ or [])
-    if set_file is not None:
-        overrides = {**_load_override_file(set_file), **overrides}
-    config = build_config(_scenario_arg(scenario), overrides)
-    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
+    config = _resolve_config(scenario, set_, set_file, identity)
 
     workdir = out_dir if out_dir is not None else _default_workdir(city_dir)
     _err.print(f"[dim]scoring {city_dir.name} ({len(inputs)} inputs, scenario={scenario})…[/dim]")
@@ -230,19 +256,33 @@ def acquire(
     force: Annotated[
         bool, typer.Option("--force", help="Re-download the regional PBF even if cached."),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Only report the regions the boundary needs (fetches boundary + Geofabrik "
+            "index, no OSM/census/LODES download).",
+        ),
+    ] = False,
 ) -> None:
     """Download the raw inputs (OSM, boundary, census, LODES) for a city.
 
     ``config.boundary`` transforms (from the scenario / ``--set``) are applied at
     acquire time to produce the ``analysis_boundary`` input; with no transform it
     equals the fetched boundary.
+
+    With ``--dry-run`` nothing is downloaded except the boundary and the Geofabrik index:
+    it prints the home / acquired / touched / missing regions so you can size
+    ``extra_regions`` before a full acquire.
     """
     city_dir = _resolve_city_dir(city)
     identity = _load_identity(city_dir)
-    overrides = _parse_overrides(set_ or [])
-    if set_file is not None:
-        overrides = {**_load_override_file(set_file), **overrides}
-    config = build_config(_scenario_arg(scenario), overrides)
+    config = _resolve_config(scenario, set_, set_file, identity)
+
+    if dry_run:
+        _acquire_dry_run(identity, config, pbf_cache_dir)
+        return
+
     out_dir = out_dir if out_dir is not None else city_dir / "datasets"
     _err.print(f"[dim]acquiring inputs for {identity.name} → {out_dir}…[/dim]")
     files = acquire_city(
@@ -253,6 +293,37 @@ def acquire(
     for role in sorted(files):
         table.add_row(role, str(files[role]))
     _console.print(table)
+
+
+def _acquire_dry_run(
+    identity: CityIdentity, config: BNAConfig, pbf_cache_dir: Path | None
+) -> None:
+    """Print the region coverage plan (`acquire --dry-run`); no data is downloaded."""
+    from bikescore_bna.acquire import plan_acquire_regions
+
+    _err.print(f"[dim]checking region coverage for {identity.name} (no download)…[/dim]")
+    try:
+        plan = plan_acquire_regions(identity, config, pbf_cache_dir=pbf_cache_dir)
+    except Exception as exc:  # boundary or Geofabrik index unreachable
+        _err.print(f"[red]dry-run failed:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    table = Table("field", "regions")
+    table.add_row("home", plan.home_region or "—")
+    table.add_row("would acquire", ", ".join(plan.acquire_regions) or "—")
+    buf = f" (⊕ {plan.network_buffer_m:g} m buffer)" if plan.network_buffer_m else ""
+    table.add_row("extent needs" + buf, ", ".join(plan.needed_regions) or "—")
+    table.add_row("[bold]missing[/bold]", ", ".join(plan.missing_regions) or "—")
+    _console.print(table)
+
+    if plan.missing_regions:
+        _err.print(
+            "[yellow]The extent needs regions not being acquired.[/yellow] Add them: "
+            f"--set extra_regions='{plan.missing_regions}' "
+            "(or set extra_regions in the scenario)."
+        )
+        raise typer.Exit(3)
+    _err.print("[green]Coverage OK — the acquired regions cover the analysis extent.[/green]")
 
 
 @app.command()
@@ -360,11 +431,7 @@ def export_cmd(
     identity = _load_identity(city_dir)
     datasets_dir = datasets if datasets is not None else city_dir / "datasets"
     inputs = _discover_inputs(datasets_dir)
-    overrides = _parse_overrides(set_ or [])
-    if set_file is not None:
-        overrides = {**_load_override_file(set_file), **overrides}
-    config = build_config(_scenario_arg(scenario), overrides)
-    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
+    config = _resolve_config(scenario, set_, set_file, identity)
 
     if from_dir is not None:
         try:
@@ -476,11 +543,7 @@ def validate_cmd(
     datasets_dir = datasets if datasets is not None else city_dir / "datasets"
     inputs = _discover_inputs(datasets_dir)
 
-    overrides = _parse_overrides(set_ or [])
-    if set_file is not None:
-        overrides = {**_load_override_file(set_file), **overrides}
-    config = build_config(_scenario_arg(scenario), overrides)
-    resolve_city_speed_defaults(config, identity)  # locale speed defaults from FIPS
+    config = _resolve_config(scenario, set_, set_file, identity)
 
     run_dir = workdir if workdir is not None else _default_workdir(city_dir)
     _err.print(f"[dim]scoring {city_dir.name} for validation (scenario={scenario})…[/dim]")

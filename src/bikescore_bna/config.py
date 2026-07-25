@@ -288,11 +288,13 @@ class BoundaryConfig:
     field set the transform is identity and the analysis boundary is byte-for-byte the
     fetched one (oracle parity preserved).
 
-    Phase 1 exposes only subsetting/hole-filling transforms — every one either shrinks
-    the extent or fills interior holes, so it stays within the already-downloaded
-    regional data (no re-acquire). Extent-expanding transforms (convex_hull,
-    override_geometry, network_buffer_m) and multi-region ``extra_regions`` arrive with
-    Phase 2.
+    Subsetting/hole-filling transforms (``fill_holes``, ``keep_largest_part``, the
+    box/circle clip) either shrink the extent or fill interior holes, so they stay
+    within the already-downloaded regional data (no re-acquire). The extent-*expanding*
+    knobs — ``convex_hull``, ``override_geometry`` (a source replacement, not a
+    transform), and a non-zero ``network_buffer_m`` — can push the analysis + clip extent
+    beyond the fetched region(s); when they do, acquire's coverage detector requires the
+    missing regions in ``BNAConfig.extra_regions`` (Phase 2).
     """
 
     fill_holes: bool = False
@@ -303,6 +305,10 @@ class BoundaryConfig:
     """Drop detached exclaves/islands, keeping only the largest polygon of a
     MultiPolygon boundary."""
 
+    convex_hull: bool = False
+    """Replace the boundary with its convex hull. Extent-expanding: the hull can bulge
+    outward past the fetched region, so it may require ``extra_regions``."""
+
     clip_shape: Literal["box", "circle"] | None = None
     """Region-restrict shape, centered on the boundary centroid and intersected with
     the real boundary. ``None`` disables clipping. Requires ``clip_size_m``."""
@@ -311,8 +317,20 @@ class BoundaryConfig:
     """Clip size in metres: box side length / circle diameter. Required when
     ``clip_shape`` is set; must be a positive number."""
 
+    override_geometry: str | Path | list[float] | tuple[float, ...] | None = None
+    """SOURCE replacement for the fetched city boundary — *not* a transform. Either a
+    filesystem path to a GeoJSON/vector file, or an inline WGS84 bounding box
+    ``[minx, miny, maxx, maxy]``. When set, acquire uses this geometry as the source
+    (and provenance) boundary; ``prepare_boundary`` transforms then run on top of it."""
+
+    network_buffer_m: float = 0.0
+    """Buffer (metres) applied to the analysis boundary when clipping the OSM road
+    network only (never the scoring boundary). ``0.0`` = exact clip (oracle parity); a
+    positive value is opt-in, expands the clip extent, changes the parsed network/scores
+    (deviating from the oracle), and routes through acquire's coverage detector (§9)."""
+
     def validate(self) -> None:
-        """Reject an inconsistent clip spec (shape and size must be set together)."""
+        """Reject an inconsistent clip spec / bad buffer / malformed override bbox."""
         if (self.clip_shape is None) != (self.clip_size_m is None):
             raise ConfigValidationError(
                 "boundary.clip_shape and boundary.clip_size_m must be set together "
@@ -322,6 +340,23 @@ class BoundaryConfig:
             raise ConfigValidationError(
                 f"boundary.clip_size_m must be positive (got {self.clip_size_m!r})."
             )
+        if self.network_buffer_m < 0:
+            raise ConfigValidationError(
+                f"boundary.network_buffer_m must be >= 0 (got {self.network_buffer_m!r})."
+            )
+        if isinstance(self.override_geometry, (list, tuple)):
+            bbox = self.override_geometry
+            if len(bbox) != 4:
+                raise ConfigValidationError(
+                    "boundary.override_geometry bbox must have 4 elements "
+                    f"[minx, miny, maxx, maxy] (got {bbox!r})."
+                )
+            minx, miny, maxx, maxy = (float(v) for v in bbox)
+            if not (minx < maxx and miny < maxy):
+                raise ConfigValidationError(
+                    "boundary.override_geometry bbox requires minx < maxx and "
+                    f"miny < maxy (got {bbox!r})."
+                )
 
 
 # ── Top-level config ──────────────────────────────────────────────────────────
@@ -372,6 +407,13 @@ class BNAConfig:
 
     min_bbox_length: int = 3300
     """Minimum trail bounding-box diagonal in metres (filters looping paths)."""
+
+    extra_regions: list[str] = field(default_factory=list)
+    """Additional regions to acquire and merge alongside the city's home region, for
+    boundaries whose (buffered) extent crosses a region line. Each entry is a Geofabrik
+    state slug or state name (e.g. ``"maryland"``, ``"district of columbia"``); for US
+    cities all three sources key the same states (OSM merge, census/LODES row concat).
+    Empty (default) = single-region acquire. Consumed at acquire time only."""
 
     # ── Extensibility registries ──────────────────────────────────────────────
 

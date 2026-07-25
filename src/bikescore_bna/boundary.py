@@ -4,16 +4,20 @@
 polygon) into the **analysis** boundary that ``parse`` / ``census`` / ``segment``
 consume. Transforms run in a fixed order:
 
-    make_valid → keep_largest_part → fill_holes → clip
+    make_valid → keep_largest_part → fill_holes → convex_hull → clip
 
 ``make_valid`` is unconditional hygiene, but is a no-op on already-valid input. When
 no transform is configured *and* the source is valid, :func:`prepare_boundary` returns
 the **same object** unchanged — the caller can then reuse the source file byte-for-byte
 (oracle parity: the analysis boundary is identical to the fetched one).
 
-Phase 1 exposes only subsetting / hole-filling transforms; every one either shrinks the
-extent or fills interior holes, so the result stays within the already-downloaded
-regional data (no re-acquire). Extent-expanding transforms live in Phase 2.
+The subsetting / hole-filling transforms (``keep_largest_part``, ``fill_holes``, the
+box/circle clip) each shrink the extent or fill interior holes, so the result stays
+within the already-downloaded regional data. ``convex_hull`` can bulge the extent
+*outward*; when it (or a non-zero network buffer, or an ``override_geometry`` source)
+pushes past the fetched region, acquire's coverage detector requires the missing
+regions in ``extra_regions``. ``override_geometry`` is resolved by acquire as a source
+replacement *before* this function runs — it is not a transform here.
 
 All metric operations (clip sizing) run in a projected CRS — ``config.output_srid`` when
 set, else a UTM estimate.
@@ -38,8 +42,16 @@ def has_boundary_transforms(bc: BoundaryConfig) -> bool:
 
     ``make_valid`` is not counted — it is unconditional hygiene, a no-op on valid
     input. Used to decide whether the analysis boundary can share the source file.
+
+    ``override_geometry`` is not counted here either: it is a *source* replacement
+    resolved by acquire before ``prepare_boundary`` runs, not a transform of the source.
     """
-    return bool(bc.fill_holes or bc.keep_largest_part or bc.clip_shape is not None)
+    return bool(
+        bc.fill_holes
+        or bc.keep_largest_part
+        or bc.convex_hull
+        or bc.clip_shape is not None
+    )
 
 
 def prepare_boundary(source_gdf: gpd.GeoDataFrame, config: BNAConfig) -> gpd.GeoDataFrame:
@@ -76,11 +88,38 @@ def prepare_boundary(source_gdf: gpd.GeoDataFrame, config: BNAConfig) -> gpd.Geo
         geom = _keep_largest_part(geom)
     if bc.fill_holes:
         geom = _fill_holes(geom)
+    if bc.convex_hull:
+        geom = geom.convex_hull
     if bc.clip_shape is not None:
         metric_crs = _metric_crs(src, config)
         geom = _clip(geom, bc.clip_shape, float(bc.clip_size_m), src.crs, metric_crs)
 
     return gpd.GeoDataFrame(geometry=[geom], crs=src.crs)
+
+
+def load_override_geometry(override: str | object) -> gpd.GeoDataFrame:
+    """Load a ``boundary.override_geometry`` source into a single-row WGS84 GeoDataFrame.
+
+    ``override`` is either a filesystem path to a GeoJSON/vector file (dissolved to one
+    geometry) or an inline WGS84 bounding box ``[minx, miny, maxx, maxy]``. This is a
+    *source* replacement for the fetched city boundary — the result becomes both the
+    provenance ``boundary`` and the input to :func:`prepare_boundary`.
+    """
+    import geopandas as gpd
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    if isinstance(override, (list, tuple)):
+        minx, miny, maxx, maxy = (float(v) for v in override)
+        return gpd.GeoDataFrame(geometry=[box(minx, miny, maxx, maxy)], crs=_WGS84)
+
+    gdf = gpd.read_file(override)
+    if gdf.crs is None:
+        gdf = gdf.set_crs(epsg=_WGS84)
+    elif gdf.crs.to_epsg() != _WGS84:
+        gdf = gdf.to_crs(epsg=_WGS84)
+    geom = unary_union(gdf.geometry)
+    return gpd.GeoDataFrame(geometry=[geom], crs=_WGS84)
 
 
 # ── Transform helpers ─────────────────────────────────────────────────────────

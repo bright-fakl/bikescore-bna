@@ -126,26 +126,40 @@ def _clip_with_pyosmium(
 
     Two-pass approach:
       Pass 1 — scan nodes, collect IDs whose location falls inside the
-               bounding box of the buffered boundary.
-      Pass 2 — write ways that reference at least one in-bbox node;
+               (buffered) boundary **polygon**.
+      Pass 2 — write ways that reference at least one inside node;
                BackReferenceWriter automatically pulls in all referenced
                node locations from the source file.
-    """
-    minlon, minlat, maxlon, maxlat = boundary_geom.bounds
 
-    _logger.info("parse  pyosmium pre-clip pass 1/2: collecting bbox node IDs …")
-    bbox_node_ids: set[int] = set()
+    Pass 1 uses a real point-in-polygon test (via a prepared geometry), not merely the
+    boundary's bounding box: since ``bbox ⊇ polygon`` a bbox filter over-includes corner
+    roads and would diverge from the osmium-CLI polygon clip, so the parsed network would
+    depend on whether the ``osmium`` binary is present. A cheap bbox pre-filter still
+    skips the expensive polygon test for the many nodes far outside the region.
+    """
+    from shapely import Point, prepare
+    from shapely.geometry.base import BaseGeometry
+
+    geom: BaseGeometry = boundary_geom  # type: ignore[assignment]
+    minlon, minlat, maxlon, maxlat = geom.bounds
+    prepare(geom)  # build the spatial index once for fast repeated .contains()
+
+    _logger.info("parse  pyosmium pre-clip pass 1/2: collecting in-boundary node IDs …")
+    inside_node_ids: set[int] = set()
     for n in osmium.FileProcessor(str(pbf_path), osmium.osm.NODE):
         if n.location.valid():
             lon, lat = n.location.lon, n.location.lat
-            if minlon <= lon <= maxlon and minlat <= lat <= maxlat:
-                bbox_node_ids.add(n.id)
-    _logger.info("parse  %d bbox nodes found", len(bbox_node_ids))
+            # Cheap bbox reject first; only bbox-hits pay for the polygon test.
+            if minlon <= lon <= maxlon and minlat <= lat <= maxlat and geom.contains(
+                Point(lon, lat)
+            ):
+                inside_node_ids.add(n.id)
+    _logger.info("parse  %d in-boundary nodes found", len(inside_node_ids))
 
     _logger.info("parse  pyosmium pre-clip pass 2/2: writing city PBF …")
     with osmium.BackReferenceWriter(str(out_pbf), ref_src=str(pbf_path), overwrite=True) as writer:
         for w in osmium.FileProcessor(str(pbf_path), osmium.osm.WAY):
-            if any(nd.ref in bbox_node_ids for nd in w.nodes):
+            if any(nd.ref in inside_node_ids for nd in w.nodes):
                 writer.add_way(w)
 
 

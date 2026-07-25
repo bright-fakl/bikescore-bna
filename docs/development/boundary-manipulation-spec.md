@@ -1,6 +1,6 @@
 # Spec — Boundary manipulation, excluded-block layer, and multi-region acquisition
 
-Status: **proposed** · Owner: Fabian · Last updated: 2026-07-25
+Status: **implemented** (Phase 1 + Phase 2) · Owner: Fabian · Last updated: 2026-07-25
 
 ## Motivation
 
@@ -318,21 +318,29 @@ Consequences for the buffer:
   extent, computed once and used both to clip and to check coverage. Both drivers of
   expansion feed it: an override/convex-hull that reaches out, *and* any non-zero
   network buffer (including whatever the existing mechanism produces).
-- Compute touched regions from that extent intersected with region polygons: the
-  **Geofabrik `index-v1.json`** for OSM and a bundled **US-states layer** for
-  census/LODES (one "touched states" computation drives all three US sources; the
-  `_US_STATE_SLUGS` table is part of the crosswalk).
-- The check runs **before** clipping. If the extent needs regions not covered by the
-  downloaded set (default region + `extra_regions`), raise the advisory error — so a
-  buffer that silently spills across a state line fails loudly instead of clipping
-  against a PBF that is missing those roads.
-- Action is **advisory**: if the extent needs regions not in `extra_regions`, raise an
-  actionable error naming them (*"add [maryland, virginia] to extra_regions or pass
-  --auto-regions"*). No surprise downloads.
+- Compute touched regions from that extent intersected with region polygons. **The
+  Geofabrik `index-v1.json` is the single region-polygon source** (fetched and cached):
+  US Geofabrik extracts follow state lines, so a touched `us/<state>` extract ↔ a touched
+  state is exact, and one "touched states" computation drives all three US sources. No
+  separate bundled US-states layer is needed — census (FIPS) and LODES (abbr) only ever
+  needed the *identifier list*, which the extract slugs already give via the crosswalk
+  (`_US_STATE_SLUGS` name→slug, `region_coverage._US_STATE_SLUG_TO_FIPS` slug→FIPS,
+  `_FIPS_TO_ABBR` FIPS→abbr). *(Implementation: `bikescore_bna.region_coverage`. The
+  spec's earlier "bundled US-states layer" was dropped as redundant.)*
+- The check runs **before** clipping, and is **gated to when expansion is possible**
+  (`network_buffer_m > 0`, `convex_hull`, `override_geometry`, or a non-empty
+  `extra_regions`) so the default single-region path never fetches the index. Coverage is
+  tested by **difference**: `uncovered = extent − ⋃(acquired region polygons)`; if a
+  non-trivial fraction of the extent (> 0.5 %, absorbing Geofabrik border slivers) is
+  uncovered, the regions whose polygons intersect that gap are the missing ones.
+- Action is **advisory**: if the extent needs regions not in the acquired set
+  (home + `extra_regions`), raise an actionable error naming them (*"add [maryland,
+  virginia] to extra_regions"*). No surprise downloads. If the index cannot be fetched
+  (offline), the guard logs a warning and proceeds rather than failing acquire.
 - Robustness notes: US is clean (three sources align on state lines; Geofabrik US
-  extracts follow state boundaries). Non-US needs only OSM (census/LODES synthetic),
-  handled by the Geofabrik index with graceful fallback to the smallest covering
-  parent extract when subregion granularity is coarse.
+  extracts follow state boundaries). The detector is **US-scoped** (`parent == "us"`
+  extracts); non-US census/LODES are synthetic and never expand, and non-US OSM
+  multi-region relies on explicit `extra_regions` without the geometric assertion.
 
 ### 10. Phase-2 tests
 
