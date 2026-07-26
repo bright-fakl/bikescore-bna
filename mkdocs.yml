@@ -27,6 +27,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - What bikescore measures: what-it-measures.md
   - Why bikescore-bna: why-bikescore.md
   - Installation: installation.md
   - Concepts: concepts.md
@@ -35,13 +36,13 @@ nav:
       - Data acquisition: how-it-works/data-acquisition.md
       - OSM parsing: how-it-works/osm-parsing.md
       - Road attributes: how-it-works/road-features.md
+      - Segmenting the road network: how-it-works/segmenting.md
       - Level of Traffic Stress: how-it-works/stress.md
       - Routing network: how-it-works/routing-network.md
       - Connectivity: how-it-works/connectivity.md
       - Destinations: how-it-works/destinations.md
       - Scoring: how-it-works/scoring.md
       - Neighborhood scores: how-it-works/neighborhood-scores.md
-      - Known deviations: how-it-works/deviations.md
   - Tutorials:
       - Overview: tutorial/index.md
       - Score a city: tutorial/run-a-city.md
@@ -57,8 +58,10 @@ nav:
       - Stress rules: reference/stress-rules.md
       - Destination catalogs: reference/destinations.md
       - Extensibility: reference/extensibility.md
+  - Differences from brokenspoke-analyzer:
+      - Overview: differences/index.md
+      - Stage-by-stage SQL mapping: differences/sql-mapping.md
+      - Intentional deviations: differences/deviations.md
   - Development:
       - Validation & parity: development/validation.md
-      - Phase log: development/phases.md
-      - Retrospectives: development/retrospectives.md
       - Contributing: development/contributing.md

@@ -101,30 +101,7 @@ BNA meaningful as a bicycle-specific analysis: it distinguishes cities where
 cycling is technically possible from those where cycling is genuinely
 comfortable.
 
-## Comparison with brokenspoke-analyzer
-
-brokenspoke computes connectivity entirely in SQL/PostGIS. pgRouting builds the
-reachable-roads tables, and a single SQL script then joins them into block-to-block
-connectivity. The SQL files are:
-
-| SQL file | What it does |
-|---|---|
-| `connectivity/census_blocks.sql` | Associate roads with census blocks |
-| `connectivity/reachable_roads_high_stress_prep.sql` | Prepare high-stress reachability run |
-| `connectivity/reachable_roads_high_stress_calc.sql` | Run `pgr_drivingDistance` (high stress) |
-| `connectivity/reachable_roads_high_stress_cleanup.sql` | Post-process high-stress results |
-| `connectivity/reachable_roads_low_stress_prep.sql` | Prepare low-stress reachability run |
-| `connectivity/reachable_roads_low_stress_calc.sql` | Run `pgr_drivingDistance` (low stress) |
-| `connectivity/reachable_roads_low_stress_cleanup.sql` | Post-process low-stress results |
-| `connectivity/connected_census_blocks.sql` | Join reachable roads into block pairs, apply the 1.25× ratio and adjacent-block flags, and count reachable blocks per source |
-
-bikescore-bna replaces this SQL connectivity with a single vectorised scipy Dijkstra
-traversal per source block in `stages/connectivity.py`. This is an architectural
-difference — brokenspoke stays in PostGIS, bikescore-bna computes the block-to-block
-table in Python — but it produces equivalent results; there are no known deviations in
-the connectivity stage.
-
-The practical motivation is performance: brokenspoke's `connected_census_blocks.sql`
-evaluates correlated subqueries over the reachable-roads tables for every candidate block
-pair, whereas bikescore-bna runs one graph traversal per source block, which is
-substantially faster on large cities.
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

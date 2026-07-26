@@ -47,3 +47,13 @@ $ bikescore-bna score ./aspen-colorado --scenario my-stress.yaml
 Because `brokenspoke-analyzer` is the parity ground truth, validate any rule change
 against a known city before relying on it — the default rule set is tuned to match the
 reference exactly (see [Validation & parity](../development/validation.md)).
+
+## Related pages
+
+- **How it works:** [Level of Traffic Stress](../how-it-works/stress.md)
+- **Reference:** [Stress rules](../reference/stress-rules.md) ·
+  [Configuration](../reference/config.md) · [CLI](../reference/cli.md)
+- **See also:** [Validation & parity](../development/validation.md) ·
+  [Differences from brokenspoke-analyzer](../differences/index.md)
+- **Related:** [Customize stress](customize-stress.md) ·
+  [Inspect the LTS network](lts-network.md)

@@ -46,3 +46,12 @@ $ bikescore-bna score ./aspen-colorado --scenario lower-speeds.yaml
 A `sparse` scenario carries only the fields it changes; everything else falls back to the
 package defaults. To change the LTS decision logic itself — not just its thresholds —
 see [Edit the stress rules](adjust-stress-yaml.md).
+
+## Related pages
+
+- **How it works:** [Level of Traffic Stress](../how-it-works/stress.md) ·
+  [Road attributes](../how-it-works/road-features.md) (speed / lane imputation)
+- **Reference:** [Configuration](../reference/config.md) ·
+  [Stress rules](../reference/stress-rules.md) · [CLI](../reference/cli.md)
+- **Related:** [Edit the stress rules](adjust-stress-yaml.md) ·
+  [Inspect the LTS network](lts-network.md)

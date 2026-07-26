@@ -1,9 +1,9 @@
 # Road Classification
 
-Before computing stress or routing, every road segment must be understood in two
-dimensions: what *type* of road it is, and what *cycling infrastructure* is
-present. Classification translates raw OpenStreetMap tags into a standardised
-vocabulary that all downstream stages can reason about.
+Every road segment is understood in two dimensions: what *type* of road it is,
+and what *cycling infrastructure* is present. Classification translates raw
+OpenStreetMap tags into a standardised vocabulary that all downstream stages can
+reason about.
 
 ## Functional class
 
@@ -93,15 +93,6 @@ as are bike infrastructure, parking, and the one-way flags. The logic lives in t
 scenario's attribute YAML, so it can be customised (e.g. to change how service roads with
 bicycle access are classified) by editing the scenario rather than Python.
 
-SQL equivalents in brokenspoke-analyzer:
-
-- `features/functional_class.sql` — highway tag → functional_class
-- `features/bike_infra.sql` — cycleway tags → ft/tf_bike_infra (built-in attribute: `bike_infra`)
-- `features/park.sql` — parking tags → ft/tf_park (built-in attribute: `parking`)
-- `features/one_way.sql` — oneway tag → one_way_car (built-in attribute: `one_way_car`)
-- `features/class_adjustments.sql` — class promotions (residential/unclassified → tertiary, runs at end of the attributes stage)
-
-
 ---
 
 ## Built-in attributes and the Attributes stage
@@ -153,7 +144,7 @@ reading the `cls_*` flag columns.
 Within the stage (`stages/attributes.py`) the sequence is:
 
 1. **Observed phase** — every attribute's main `compute`, in topo order (`apply_attributes`).
-2. Drop rows with NULL `functional_class` (no valid highway type — matches the SQL `DELETE`).
+2. Drop rows with NULL `functional_class` (no valid highway type).
 3. Drop the non-persisted scratch flag columns.
 4. **Fallback passes** — imputation: each attribute's optional `fallback` Decision fills
    the remaining nulls, keyed on the now-promoted `functional_class`, adding `{col}_imputed`
@@ -209,13 +200,12 @@ Priorities 2–4 are the `fallback` passes of the `speed_parsed` / `lanes_ft` / 
 attributes; they run after the observed OSM values are read and after `functional_class`
 is promoted, so the per-class defaults key on the final class.
 
-For `width_ft`, only the OSM `width` tag is used — there are no road-type defaults
-because the SQL reference does not apply them and the stress stage uses a fixed 5 ft
+For `width_ft`, only the OSM `width` tag is used — there are no road-type defaults; the stress stage uses a fixed 5 ft
 fallback for bike infrastructure width checks.
 
 ## Speed unit handling
 
-OSM `maxspeed` values appear in several formats. The SQL reference (and bikescore-bna)
+OSM `maxspeed` values appear in several formats. bikescore-bna
 converts all values to **mph**:
 
 | OSM value | Interpretation | Result |
@@ -225,7 +215,7 @@ converts all values to **mph**:
 | `"40 kmph"` | Explicit km/h | 40 ÷ 1.609, rounded to nearest 5 = 25 mph |
 | `"signals"` | Non-numeric | NULL (falls through to next priority level) |
 
-Speeds rounded to the nearest 5 mph match the SQL reference exactly
+Speeds are rounded to the nearest 5 mph
 (`ROUND(... / 1.609 / 5) * 5`).
 
 ## Configuring defaults
@@ -256,61 +246,7 @@ stage (`bikescore-bna/stages/attributes.py`) via `apply_attribute_fallbacks` *af
 observed phase and the `functional_class` promotion. So `functional_class` is already set
 (and class-adjusted) when the per-class speed and lane defaults are applied.
 
-SQL equivalents in brokenspoke-analyzer:
-
-- `features/speed_limit.sql` — OSM maxspeed → speed_limit (mph)
-- `features/lanes.sql` — lane count tags → ft_lanes, tf_lanes
-- `features/width_ft.sql` — OSM width → width_ft (feet)
-
----
-
-## Comparison with brokenspoke-analyzer
-
-### Classification
-
-brokenspoke computes road attributes as a series of in-database SQL updates
-inside `compute.attributes()`. The execution order matters because later scripts
-read columns written by earlier ones:
-
-| SQL file | bikescore-bna equivalent |
-|---|---|
-| `prepare_tables.sql` | `stages/parse.py` (column naming during parse) |
-| `features/one_way.sql` | `one_way_car` attribute (`data/attributes/standard-bna.yaml`) |
-| `features/functional_class.sql` | `functional_class` attribute, observed pass (`data/attributes/standard-bna.yaml`) |
-| `features/paths.sql` | `functional_class` attribute + its `footway_wide`/`is_golf_path` flags |
-| `features/bike_infra.sql` | `bike_infra` attribute (`data/attributes/standard-bna.yaml`) |
-| `features/park.sql` | `parking` attribute (`data/attributes/standard-bna.yaml`) |
-| `features/class_adjustments.sql` | `functional_class` attribute, `class_promotion` pass (`data/attributes/standard-bna.yaml`) |
-| `features/legs.sql` | *(deferred to stress stage — requires topology)* |
-| `features/signalized.sql` | intersection attributes (`intersection_attributes.py`, applied by the parse stage) |
-| `features/stops.sql` | intersection attributes (`intersection_attributes.py`, applied by the parse stage) |
-| `features/rrfb.sql` | intersection attributes (`intersection_attributes.py`, applied by the parse stage) |
-| `features/island.sql` | intersection attributes (`intersection_attributes.py`, applied by the parse stage) |
-
-All of these are applied by the single `attributes` stage (`stages/attributes.py`), except
-the intersection attributes, which the parse stage attaches. Two SQL bugs are fixed in
-bikescore-bna's attributes output:
-
-- **[§1a Parking tag overwrite](deviations.md#1a-parking-tag-overwrite)** —
-  `park.sql` silently clears valid parking data for roads tagged with
-  `parking:lane:both`. bikescore-bna evaluates all three cases independently.
-- **[§1b Opposite-direction track dead code](deviations.md#1b-opposite-direction-bike-track-dead-code)** —
-  a copy-paste error in `bike_infra.sql` makes the `tf_bike_infra=track`
-  assignment for `ft` one-way roads unreachable. bikescore-bna corrects the
-  condition.
-
-### Imputation
-
-| SQL file | bikescore-bna equivalent |
-|---|---|
-| `features/speed_limit.sql` | `speed_parsed` attribute — fallback passes (`data/attributes/standard-bna.yaml`) |
-| `features/lanes.sql` | `lanes_ft` / `lanes_tf` attributes — fallback passes |
-| `features/width_ft.sql` | `width_parsed` attribute |
-| `speed_tables.sql` | `bikescore-bna/data/city_fips_speed.csv` + `state_fips_speed.csv` |
-
-In brokenspoke, speed and lane imputation runs as part of the same `attributes()`
-call that does classification (before topology splitting). In bikescore-bna the same work
-happens as the `fallback` passes at the tail of the `attributes` stage (after the observed
-phase and `functional_class` promotion), so the effect is identical — `functional_class`
-is already set when the road-type defaults are applied.
-
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

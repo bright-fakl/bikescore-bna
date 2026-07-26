@@ -1,7 +1,11 @@
-# Differences from brokenspoke-analyzer
+# Intentional deviations
 
-bikescore-bna reimplements the [PeopleForBikes brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
-pipeline in pure Python. The two implementations produce closely matching output across all stages, with exceptions documented here.
+Almost everything `bikescore-bna` computes matches the PeopleForBikes
+[brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer)
+reference. This page lists the deliberate exceptions — the small set of places
+where the output differs on purpose, each with its reasoning. For the
+architectural mapping of which Python stage replaces which SQL script (with no
+output change), see the [stage-by-stage SQL mapping](sql-mapping.md).
 
 Every deviation is one of three types:
 

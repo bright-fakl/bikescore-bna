@@ -1,9 +1,9 @@
 # How destinations work
 
-The destinations stage finds points of interest (POIs) in the parsed OSM data,
-groups nearby POIs of the same type into clusters, and then links each cluster to
-the census blocks that contain it. This association is later used by the scoring
-stage to measure how many destination clusters each block can reach by bike.
+The destinations stage finds points of interest (POIs) in the parsed OSM data, groups nearby POIs of
+the same type into clusters, and links each cluster to the census blocks that
+contain it. The scoring stage later uses this to measure how many destinations
+each block can reach by bike.
 
 ## The 13 standard destination types
 
@@ -87,45 +87,7 @@ Custom destinations registered via `DestinationRegistry` are processed identical
 to the 13 standard types. No special-casing is needed. See
 [Adding a custom destination](../tutorial/add-destination.md) for a worked example.
 
-## Comparison with brokenspoke-analyzer
-
-brokenspoke locates destinations through SQL scripts that query the PostGIS
-tables populated during OSM import. One script per destination type, all under
-`connectivity/destinations/`:
-
-| SQL file | Destination type |
-|---|---|
-| `destinations/colleges.sql` | Technical/vocational colleges |
-| `destinations/community_centers.sql` | Community centers |
-| `destinations/dentists.sql` | Dentists |
-| `destinations/doctors.sql` | Doctors / clinics |
-| `destinations/hospitals.sql` | Hospitals |
-| `destinations/parks.sql` | Parks |
-| `destinations/pharmacies.sql` | Pharmacies |
-| `destinations/retail.sql` | Retail |
-| `destinations/schools.sql` | K-12 schools |
-| `destinations/social_services.sql` | Social services |
-| `destinations/supermarkets.sql` | Grocery stores |
-| `destinations/transit.sql` | Transit stops |
-| `destinations/universities.sql` | Universities |
-
-Each script uses `ST_DWithin(boundary, max_trip_distance)` to restrict POIs to
-the service area, then applies PostGIS `ST_ClusterDBSCAN` for polygon-based types
-and a custom clustering approach for point types.
-
-bikescore-bna collects all destination POIs during the parse stage (a single osmium
-pass), then clusters and filters them in `stages/destinations.py` using
-`scipy.cluster.hierarchy`. The `OsmMatcher` conditions defined in
-`DestinationRegistry` encode the same tag logic as the per-type SQL scripts.
-
-Two known deviations affect destination counts:
-
-- **[§5 Clipping differences](deviations.md#clipping-approaches)** — brokenspoke's
-  vestigial `osmconvert -b=bbox` step can exclude transit stops that are within
-  the service radius but outside the census-block bounding box (e.g. ferry
-  terminals). bikescore-bna clips only by `DWithin(max_trip_distance)` and
-  includes these stops correctly.
-- **[§6a Retail cluster floating-point sensitivity](deviations.md#6a-floating-point-sensitivity-at-cluster-threshold)** —
-  for a small number of retail POI pairs at the 50 m cluster threshold,
-  scipy and PostGIS assign different cluster memberships due to floating-point
-  differences. The discrepancy is sub-1% and irreducible.
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

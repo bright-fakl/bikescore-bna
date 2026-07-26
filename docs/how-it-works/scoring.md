@@ -179,37 +179,9 @@ Blocks with no connectivity at all (isolated road network) receive a score of `0
 
 ## Implementation notes
 
-All scoring uses **vectorised pandas GROUP BY** over `connectivity_df`. The SQL
-reference uses correlated subqueries (O(blocks × pairs) per destination type, which
-takes minutes for large cities). The Python implementation is O(pairs) total — a
-single pass through the connectivity table.
+All scoring is a single **vectorised pandas GROUP BY** over `connectivity_df`: one O(pairs) pass through the connectivity table, computing every destination type at once.
 
-## Comparison with brokenspoke-analyzer
-
-brokenspoke computes per-block scores through a series of SQL scripts in
-`connectivity/`:
-
-| SQL file | What it does |
-|---|---|
-| `access_population.sql` | Population low/high-stress counts and score |
-| `access_jobs.sql` | Employment low/high-stress counts and score |
-| `access_colleges.sql` | College access score |
-| `access_community_centers.sql` | Community centre access score |
-| `access_dentists.sql` | Dentist access score |
-| `access_doctors.sql` | Doctor access score |
-| `access_hospitals.sql` | Hospital access score |
-| `access_parks.sql` | Park access score |
-| `access_pharmacies.sql` | Pharmacy access score |
-| `access_retail.sql` | Retail access score |
-| `access_schools.sql` | School access score |
-| `access_social_services.sql` | Social-services access score |
-| `access_supermarkets.sql` | Supermarket access score |
-| `access_trails.sql` | Trail access score (reverse Dijkstra in SQL) |
-| `access_transit.sql` | Transit access score |
-| `access_universities.sql` | University access score |
-| `access_overall.sql` | Per-block overall score combining all categories |
-
-bikescore-bna reimplements this SQL scoring logic in `stages/scores.py`, replacing
-the per-destination correlated subqueries with a single vectorised pandas GROUP BY
-over the connectivity DataFrame. This is an architectural difference that produces
-equivalent results; there are no known deviations in the scores stage.
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

@@ -1,49 +1,58 @@
 # Why bikescore-bna
 
-`bikescore-bna` is a pure-Python reimplementation of the PeopleForBikes
-[brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer) — the
-Bicycle Network Analysis (BNA). It produces the same Level of Traffic Stress,
-connectivity, and destination-access scores from the same OpenStreetMap and US Census /
-LODES inputs.
+The [Bicycle Network Analysis](what-it-measures.md) measures how bikeable a city
+is. Running it, historically, has meant standing up a database. `bikescore-bna`
+reimplements it as an ordinary Python library, so computing a city's bike score
+is a function call.
 
-## Motivation
+## The problem it solves
 
-brokenspoke-analyzer implements the analysis as SQL running inside a PostgreSQL / PostGIS
-database, orchestrated through Docker. Scoring a city means standing up a database,
-loading data into it, and running the SQL scripts in order. That is a capable setup for a
-hosted service, but heavyweight when all you want is the score for one city.
+The reference implementation of the analysis — PeopleForBikes'
+[brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer) —
+runs the whole thing as SQL inside a PostgreSQL / PostGIS database, orchestrated
+through Docker. Scoring a city means provisioning a database, loading data into
+it, and running the SQL scripts in order.
 
-`bikescore-bna` reimplements the same algorithm as an ordinary Python library:
+That is a capable, production-grade setup for a hosted service. It is also
+heavyweight when all you want is the score for one city — to explore a "what if we
+added a protected lane here?" scenario, to run the analysis inside a notebook, or
+to embed scoring in a larger application.
+
+## The design goals
+
+`bikescore-bna` reimplements the exact same analysis as an ordinary Python
+library, built around three goals:
 
 - **No database, no server, no container.** The pipeline runs in-process on
-  GeoPandas / Shapely / SciPy. Inputs are files; outputs are files.
-- **Embeddable.** `score_city(inputs, config)` is a plain function you can call from a
-  script, a notebook, or another application, and get results back as DataFrames /
-  parquet.
-- **Configurable as data.** Stress thresholds, imputation defaults, scoring weights,
-  destination catalogs, and the traffic-stress rules themselves live in scenario
-  documents and decision tables, not in code — so you can adjust the analysis without
-  editing the pipeline. See [Extensibility](reference/extensibility.md).
+  GeoPandas / Shapely / SciPy. Inputs are files; outputs are files. Installation
+  is `pip install bikescore-bna`.
 
-## How it differs from brokenspoke-analyzer
+- **Embeddable.** `score_city(inputs, config)` is a plain function you can call
+  from a script, a notebook, or another application, and get results back as
+  DataFrames / parquet. There is no shared state to manage between runs.
 
-At the level of the **algorithm and the numbers**, it does not: `bikescore-bna` targets
-value-for-value parity with brokenspoke-analyzer, and each stage is validated against the
-reference output (Aspen, Colorado, is the manual validation city). What differs is
-everything *around* the algorithm:
+- **Configurable as data.** Stress thresholds, imputation defaults, scoring
+  weights, destination catalogs, and the traffic-stress rules themselves live in
+  scenario documents and decision tables, not in code. You can adjust the analysis
+  — or model a policy scenario — without editing the pipeline. See
+  [Extensibility](reference/extensibility.md).
 
-| | brokenspoke-analyzer | bikescore-bna |
-|---|---|---|
-| Runtime | PostgreSQL + PostGIS, SQL scripts | Pure Python, in-process |
-| Deployment | Docker container + database | `pip install bikescore-bna` |
-| Interface | Load a DB, run the scripts | A library function and a small CLI |
-| Analysis logic | SQL | Decision tables + scenario config (rules are data) |
-| State | Database | None — files in, files out |
+## What it deliberately keeps identical
 
-There are also a **small number of intentional differences in the output**, where
-`bikescore-bna` corrects a bug in the reference SQL, makes a different (and better-justified)
-pipeline-ordering choice, or differs by an irreducible floating-point artefact at a
-threshold. Each one is documented, with its reasoning, under
-[Differences from brokenspoke-analyzer](how-it-works/deviations.md). The SQL reference is
-the ground truth: where the two ever disagree without an entry on that page, `bikescore-bna`
-is treating it as a bug to fix.
+The one thing `bikescore-bna` does *not* change is the analysis itself. It targets
+value-for-value parity with brokenspoke-analyzer, and every pipeline stage is
+validated against the reference output. A score from `bikescore-bna` is meant to
+be the score you would have gotten from the original SQL implementation — just
+computed without the database.
+
+Where the two implementations differ — the SQL scripts each Python stage replaces,
+and the small set of places the output *intentionally* differs (bug fixes,
+better-justified ordering choices, irreducible floating-point artefacts) — is
+documented in full in
+[Differences from brokenspoke-analyzer](differences/index.md).
+
+## Where to go next
+
+- [What bikescore measures](what-it-measures.md) — the scores, in plain language.
+- [How it works](how-it-works/index.md) — the pipeline, stage by stage.
+- [Differences from brokenspoke-analyzer](differences/index.md) — how this relates to the reference implementation.

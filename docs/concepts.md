@@ -1,7 +1,9 @@
 # Concepts
 
-A `bikescore-bna` run is a pure function of three things: **inputs**, a **config**, and the
-**pipeline**. Understanding these five nouns is enough to use the whole library.
+A `bikescore-bna` run is a pure function of its **inputs** and a **config**, executed
+by the **pipeline**. Five nouns describe the whole library — a **city**, its
+**inputs**, a **config**, the **pipeline**, and the **`score_city`** function that
+runs it — one per section below. Understanding them is enough to use it.
 
 ## City
 
