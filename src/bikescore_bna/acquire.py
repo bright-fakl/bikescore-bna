@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     import geopandas as gpd
 
     from bikescore_bna.city import CityIdentity
+    from bikescore_bna.config import BNAConfig
 
 _logger = logging.getLogger("bikescore-bna")
 
@@ -288,7 +290,47 @@ def _find_pbf_by_url(cache_dir: Path, url: str) -> tuple[Path, PbfMeta] | None:
 
 def _download_state_pbf(city: CityIdentity, config: AcquireConfig) -> tuple[Path, PbfMeta]:
     """Download (or reuse cached) the regional PBF for *city*. Returns (path, meta)."""
-    url = _build_geofabrik_url(city)
+    return _download_pbf_by_url(_build_geofabrik_url(city), config)
+
+
+def _download_region_pbf(
+    country: str, region: str, config: AcquireConfig
+) -> tuple[Path, PbfMeta]:
+    """Download (or reuse cached) the regional PBF for a raw country/region slug."""
+    return _download_pbf_by_url(
+        _geofabrik_url_for(country, region, _GEOFABRIK_BASE), config
+    )
+
+
+def _osmium_merge(pbf_paths: list[Path], out_path: Path) -> Path:
+    """Merge several Geofabrik extracts into one PBF via ``osmium merge`` (ID-based union).
+
+    ``merge`` deduplicates by identity (type+id+version) and preserves sort order, so a
+    border-crossing way present in full in each extract collapses to a single connected
+    way — stitching the networks with no gaps or doubled edges. Requires the ``osmium``
+    CLI (there is no clean large-merge path in pyosmium); errors clearly if missing.
+    """
+    osmium_bin = shutil.which("osmium")
+    if not osmium_bin:
+        raise RuntimeError(
+            "Merging multiple regions requires the 'osmium' CLI, which was not found on "
+            "PATH. Install osmium-tool (e.g. `apt install osmium-tool` / "
+            "`brew install osmium-tool`) or reduce extra_regions to a single region."
+        )
+    _logger.info("acquire  osmium merge %d extracts → %s", len(pbf_paths), out_path.name)
+    try:
+        subprocess.run(
+            [osmium_bin, "merge", *[str(p) for p in pbf_paths],
+             "-o", str(out_path), "--overwrite"],
+            check=True, capture_output=True, text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"osmium merge failed:\n{exc.stderr}") from exc
+    return out_path
+
+
+def _download_pbf_by_url(url: str, config: AcquireConfig) -> tuple[Path, PbfMeta]:
+    """Download (or reuse cached) the regional PBF at *url*. Returns (path, meta)."""
     rel_path = _pbf_rel_path_from_url(url)
     cache_dir = config.pbf_cache_dir / Path(rel_path).parent
 
@@ -339,25 +381,43 @@ def _download_state_pbf(city: CityIdentity, config: AcquireConfig) -> tuple[Path
 # ── Census blocks (US only) ──────────────────────────────────────────────────
 
 def _download_census_blocks_tmp(
-    state_fips: str, boundary_gdf: gpd.GeoDataFrame, tmp_dir: Path,
+    state_fips_list: list[str], boundary_gdf: gpd.GeoDataFrame, tmp_dir: Path,
 ) -> Path | None:
-    """Download 2020 census blocks for the state, filter to the boundary. Returns a path."""
+    """Download 2020 census blocks for one or more states, filter to the boundary.
+
+    Blocks from every state are concatenated (GEOID20 is state-prefixed, so cross-state
+    rows never collide) and de-duplicated on ``geoid20`` as a safety net, then filtered to
+    the boundary. Returns the parquet path, or ``None`` if all downloads failed.
+    """
+    import pandas as pd
     import pygris
 
-    _logger.info("acquire  downloading census blocks (state=%s)", state_fips)
-    try:
-        blocks = pygris.blocks(state=state_fips, year=_CENSUS_BLOCKS_YEAR, cache=True)
-        blocks.columns = [c.lower() for c in blocks.columns]
-        boundary_union = boundary_gdf.geometry.union_all()
-        blocks = blocks[blocks.geometry.intersects(boundary_union)].copy()
-        blocks = blocks.reset_index(drop=True)
-        _logger.info("acquire  %d census blocks within city boundary", len(blocks))
-        out = tmp_dir / "census.parquet"
-        blocks.to_parquet(out)
-        return out
-    except Exception as exc:
-        _logger.warning("acquire  census block download failed: %s", exc)
+    boundary_union = boundary_gdf.geometry.union_all()
+    frames = []
+    for state_fips in state_fips_list:
+        _logger.info("acquire  downloading census blocks (state=%s)", state_fips)
+        try:
+            blocks = pygris.blocks(state=state_fips, year=_CENSUS_BLOCKS_YEAR, cache=True)
+            blocks.columns = [c.lower() for c in blocks.columns]
+            blocks = blocks[blocks.geometry.intersects(boundary_union)].copy()
+            frames.append(blocks)
+        except Exception as exc:
+            _logger.warning("acquire  census block download failed (state=%s): %s", state_fips, exc)
+
+    if not frames:
         return None
+
+    blocks = pd.concat(frames, ignore_index=True)
+    if "geoid20" in blocks.columns:
+        blocks = blocks.drop_duplicates(subset="geoid20")
+    blocks = blocks.reset_index(drop=True)
+    _logger.info(
+        "acquire  %d census blocks within boundary (%d state(s))",
+        len(blocks), len(frames),
+    )
+    out = tmp_dir / "census.parquet"
+    blocks.to_parquet(out)
+    return out
 
 
 # ── LODES employment (US only) ───────────────────────────────────────────────
@@ -383,17 +443,49 @@ def _lodes_latest_year(state_abbr: str, base_url: str) -> int:
     return 2020
 
 
-def _download_lodes_tmp(
-    state_abbr: str, year: int, tmp_dir: Path,
+def _download_lodes_multi(
+    state_abbrs: list[str], tmp_dir: Path,
 ) -> tuple[Path | None, Path | None]:
-    """Download LODES main+aux OD CSVs for *state_abbr*/*year*. Returns (main, aux)."""
-    state = state_abbr.lower()
-    _logger.info("acquire  downloading LODES %d for %s", year, state.upper())
-    main_url = f"{_LODES_BASE}/{state}/od/{state}_od_main_JT00_{year}.csv.gz"
-    aux_url = f"{_LODES_BASE}/{state}/od/{state}_od_aux_JT00_{year}.csv.gz"
-    main = _download_lodes_file_tmp(main_url, tmp_dir / "lodes_main.csv")
-    aux = _download_lodes_file_tmp(aux_url, tmp_dir / "lodes_aux.csv")
-    return main, aux
+    """Download LODES main+aux OD CSVs for several states and concat each into one file.
+
+    Each state's latest available year is probed independently. Rows are concatenated and
+    de-duplicated on the OD key (``w_geocode``, ``h_geocode``); cross-state geocodes are
+    state-prefixed so they never collide — the dedupe only guards accidental repeats.
+    Returns ``(combined_main, combined_aux)``; either is ``None`` if no state produced it.
+    """
+    import pandas as pd
+
+    main_parts: list[Path] = []
+    aux_parts: list[Path] = []
+    for i, abbr in enumerate(state_abbrs):
+        year = _lodes_latest_year(abbr, _LODES_BASE)
+        state = abbr.lower()
+        main_url = f"{_LODES_BASE}/{state}/od/{state}_od_main_JT00_{year}.csv.gz"
+        aux_url = f"{_LODES_BASE}/{state}/od/{state}_od_aux_JT00_{year}.csv.gz"
+        main = _download_lodes_file_tmp(main_url, tmp_dir / f"lodes_main_{i}.csv")
+        aux = _download_lodes_file_tmp(aux_url, tmp_dir / f"lodes_aux_{i}.csv")
+        if main is not None:
+            main_parts.append(main)
+        if aux is not None:
+            aux_parts.append(aux)
+
+    def _concat(parts: list[Path], dest: Path) -> Path | None:
+        if not parts:
+            return None
+        if len(parts) == 1:
+            parts[0].replace(dest)
+            return dest
+        frames = [pd.read_csv(p, dtype={"w_geocode": str, "h_geocode": str}) for p in parts]
+        combined = pd.concat(frames, ignore_index=True)
+        key = [c for c in ("w_geocode", "h_geocode") if c in combined.columns]
+        if key:
+            combined = combined.drop_duplicates(subset=key)
+        combined.to_csv(dest, index=False)
+        return dest
+
+    return _concat(main_parts, tmp_dir / "lodes_main.csv"), _concat(
+        aux_parts, tmp_dir / "lodes_aux.csv"
+    )
 
 
 def _download_lodes_file_tmp(url: str, dest_csv: Path) -> Path | None:
@@ -438,11 +530,19 @@ class InputProvider(Protocol):
     """
 
     def acquire(
-        self, city: CityIdentity, out_dir: Path, *, force: bool = False,
+        self,
+        city: CityIdentity,
+        out_dir: Path,
+        *,
+        force: bool = False,
+        config: BNAConfig | None = None,
     ) -> dict[str, Path]:
-        """Produce ``{"osm", "boundary", "census", "lodes_main", "lodes_aux"}`` -> path.
+        """Produce ``{"osm", "boundary", "analysis_boundary", "census", "lodes_main", "lodes_aux"}`` -> path.
 
-        US-only inputs (``census`` / ``lodes_*``) may be omitted for non-US cities.
+        ``analysis_boundary`` is the boundary after ``prepare_boundary`` transforms
+        (from ``config.boundary``); it equals ``boundary`` when no transform is
+        configured (or ``config`` is ``None``). US-only inputs (``census`` /
+        ``lodes_*``) may be omitted for non-US cities.
         """
         ...
 
@@ -465,49 +565,121 @@ class UsCensusLodesProvider:
         )
 
     def acquire(
-        self, city: CityIdentity, out_dir: Path, *, force: bool = False,
+        self,
+        city: CityIdentity,
+        out_dir: Path,
+        *,
+        force: bool = False,
+        config: BNAConfig | None = None,
     ) -> dict[str, Path]:
         import tempfile
 
         import geopandas as gpd
 
+        from bikescore_bna.region_coverage import (
+            check_coverage,
+            resolve_acquire_regions,
+            slug_to_fips,
+        )
         from bikescore_bna.stages.parse import pre_clip_pbf
 
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        config = self._config(out_dir, force)
+        ac = self._config(out_dir, force)
         result: dict[str, Path] = {}
+
+        bc = config.boundary if config is not None else None
+        if bc is not None:
+            bc.validate()  # reject negative buffer / bad clip / malformed override bbox
+        override = bc.override_geometry if bc is not None else None
+        network_buffer_m = float(bc.network_buffer_m) if bc is not None else 0.0
+        extra_regions = list(config.extra_regions) if config is not None else []
 
         with tempfile.TemporaryDirectory() as _tmp:
             tmp_dir = Path(_tmp)
 
-            # ── Boundary ──────────────────────────────────────────────────
-            boundary_tmp = _fetch_boundary_tmp(city, tmp_dir)
-            boundary_gdf = gpd.read_file(boundary_tmp)
-            if boundary_gdf.crs is None or boundary_gdf.crs.to_epsg() != 4326:
-                boundary_gdf = boundary_gdf.to_crs(epsg=4326)
-            result["boundary"] = self._store(config, "boundary", boundary_tmp, ".geojson")
+            # ── Source boundary (override_geometry or fetched) ────────────
+            if override is not None:
+                from bikescore_bna.boundary import load_override_geometry
 
-            # ── Regional PBF → clip to boundary ───────────────────────────
-            region_pbf, _ = _download_state_pbf(city, config)
-            clipped_tmp = pre_clip_pbf(region_pbf, boundary_gdf, 0.0, tmp_dir)
-            result["osm"] = self._store(config, "osm", clipped_tmp, ".pbf")
+                boundary_gdf = load_override_geometry(override)
+                boundary_tmp = tmp_dir / "boundary.geojson"
+                boundary_gdf.to_file(boundary_tmp, driver="GeoJSON")
+            else:
+                boundary_tmp = _fetch_boundary_tmp(city, tmp_dir)
+                boundary_gdf = gpd.read_file(boundary_tmp)
+                if boundary_gdf.crs is None or boundary_gdf.crs.to_epsg() != 4326:
+                    boundary_gdf = boundary_gdf.to_crs(epsg=4326)
+            result["boundary"] = self._store(ac, "boundary", boundary_tmp, ".geojson")
+
+            # Analysis boundary: prepare_boundary transforms; identity (same file)
+            # when no transform is configured, preserving default parity.
+            analysis_gdf = boundary_gdf
+            if config is not None:
+                from bikescore_bna.boundary import prepare_boundary
+
+                analysis_gdf = prepare_boundary(boundary_gdf, config)
+            if analysis_gdf is boundary_gdf:
+                result["analysis_boundary"] = result["boundary"]
+            else:
+                analysis_tmp = tmp_dir / "analysis_boundary.geojson"
+                analysis_gdf.to_file(analysis_tmp, driver="GeoJSON")
+                result["analysis_boundary"] = self._store(
+                    ac, "analysis_boundary", analysis_tmp, ".geojson"
+                )
+
+            # ── Regions to acquire + advisory coverage guard (§9) ─────────
+            region_slugs = resolve_acquire_regions(city, extra_regions)
+            # The coverage check only matters when the extent can expand past the home
+            # region; skipping it otherwise keeps the default path free of an index fetch.
+            expansion_possible = bool(
+                network_buffer_m
+                or extra_regions
+                or (bc is not None and (bc.convex_hull or override is not None))
+            )
+            if city.is_us and expansion_possible:
+                check_coverage(
+                    analysis_gdf, network_buffer_m, region_slugs,
+                    cache_dir=ac.pbf_cache_dir,
+                )
+
+            # ── Regional PBF(s) → (merge) → clip to buffered boundary ─────
+            if len(region_slugs) <= 1:
+                region_pbf, _ = _download_state_pbf(city, ac)
+            else:
+                pbfs = [
+                    _download_region_pbf(city.country, slug, ac)[0]
+                    for slug in region_slugs
+                ]
+                region_pbf = _osmium_merge(pbfs, tmp_dir / "merged.osm.pbf")
+            clipped_tmp = pre_clip_pbf(region_pbf, analysis_gdf, network_buffer_m, tmp_dir)
+            result["osm"] = self._store(ac, "osm", clipped_tmp, ".pbf")
 
             # ── Census + LODES (US only) ──────────────────────────────────
             if city.is_us and city.fips_code is not None:
-                state_fips = city.fips_code[:2]
-                census_tmp = _download_census_blocks_tmp(state_fips, boundary_gdf, tmp_dir)
-                if census_tmp is not None:
-                    result["census"] = self._store(config, "census", census_tmp, ".parquet")
+                state_fips_list = [city.fips_code[:2]]
+                for slug in region_slugs:
+                    f = slug_to_fips(slug)
+                    if f and f not in state_fips_list:
+                        state_fips_list.append(f)
 
-                state_abbr = _state_abbr_from_fips(state_fips)
-                if state_abbr:
-                    year = _lodes_latest_year(state_abbr, _LODES_BASE)
-                    main_tmp, aux_tmp = _download_lodes_tmp(state_abbr, year, tmp_dir)
+                census_tmp = _download_census_blocks_tmp(
+                    state_fips_list, analysis_gdf, tmp_dir
+                )
+                if census_tmp is not None:
+                    result["census"] = self._store(ac, "census", census_tmp, ".parquet")
+
+                abbrs: list[str] = []
+                for f in state_fips_list:
+                    a = _state_abbr_from_fips(f)
+                    if a and a not in abbrs:
+                        abbrs.append(a)
+                if abbrs:
+                    main_tmp, aux_tmp = _download_lodes_multi(abbrs, tmp_dir)
                     if main_tmp is not None:
-                        result["lodes_main"] = self._store(config, "lodes_main", main_tmp, ".csv")
+                        result["lodes_main"] = self._store(ac, "lodes_main", main_tmp, ".csv")
                     if aux_tmp is not None:
-                        result["lodes_aux"] = self._store(config, "lodes_aux", aux_tmp, ".csv")
+                        result["lodes_aux"] = self._store(ac, "lodes_aux", aux_tmp, ".csv")
 
         return result
 
@@ -528,6 +700,7 @@ def acquire_city(
     pbf_cache_dir: Path | None = None,
     force: bool = False,
     provider: InputProvider | None = None,
+    config: BNAConfig | None = None,
 ) -> dict[str, Path]:
     """Acquire the raw inputs ``score_city`` needs for *city*, DB-free.
 
@@ -538,19 +711,93 @@ def acquire_city(
             Ignored when a custom *provider* is supplied.
         force: Re-download the regional PBF even on a cache hit.
         provider: Override the default US census/LODES :class:`InputProvider`.
+        config: Effective :class:`BNAConfig`. When set, ``config.boundary`` transforms
+            are applied at acquire time to produce the ``analysis_boundary`` input.
+            ``None`` (default) means no transform — analysis boundary == boundary.
 
     Returns:
         ``{name: path}`` covering ``osm`` / ``boundary`` and (US cities) ``census`` /
         ``lodes_main`` / ``lodes_aux`` — the ``inputs`` dict ``score_city`` expects.
     """
     prov = provider if provider is not None else UsCensusLodesProvider(pbf_cache_dir)
-    return prov.acquire(city, Path(out_dir), force=force)
+    return prov.acquire(city, Path(out_dir), force=force, config=config)
+
+
+@dataclass
+class RegionPlan:
+    """What a `--dry-run` acquire would need — computed without downloading data.
+
+    ``acquire_regions`` is the set that *would be* fetched (home + ``extra_regions``);
+    ``missing_regions`` is the actionable "add these to extra_regions" list — the regions
+    the (buffered) extent needs but the acquired set does not cover (empty ⇒ covered); and
+    ``needed_regions`` = acquire ∪ missing is the full set required to cover the extent.
+    """
+
+    home_region: str | None
+    acquire_regions: list[str]
+    needed_regions: list[str]
+    missing_regions: list[str]
+    network_buffer_m: float
+
+
+def plan_acquire_regions(
+    city: CityIdentity,
+    config: BNAConfig,
+    *,
+    pbf_cache_dir: Path | None = None,
+) -> RegionPlan:
+    """Compute the region coverage plan for *city* without downloading OSM/census/LODES.
+
+    Fetches only the boundary (or resolves ``override_geometry``) and the Geofabrik index,
+    applies ``prepare_boundary``, and reports the home / acquired / touched / missing
+    regions. Backs the acquire ``--dry-run`` flag. US-only: the extent-vs-region geometry
+    check keys on US Geofabrik extracts, so ``touched_regions`` is empty for non-US cities.
+    """
+    import tempfile
+
+    import geopandas as gpd
+
+    from bikescore_bna.boundary import load_override_geometry, prepare_boundary
+    from bikescore_bna.region_coverage import missing_regions, resolve_acquire_regions
+
+    bc = config.boundary
+    bc.validate()  # reject negative buffer / bad clip / malformed override bbox
+    override = bc.override_geometry
+    network_buffer_m = float(bc.network_buffer_m)
+    cache = pbf_cache_dir if pbf_cache_dir is not None else _default_pbf_cache_dir()
+
+    with tempfile.TemporaryDirectory() as _tmp:
+        tmp_dir = Path(_tmp)
+        if override is not None:
+            boundary_gdf = load_override_geometry(override)
+        else:
+            boundary_tmp = _fetch_boundary_tmp(city, tmp_dir)
+            boundary_gdf = gpd.read_file(boundary_tmp)
+            if boundary_gdf.crs is None or boundary_gdf.crs.to_epsg() != 4326:
+                boundary_gdf = boundary_gdf.to_crs(epsg=4326)
+        analysis_gdf = prepare_boundary(boundary_gdf, config)
+
+    acquire_regions = resolve_acquire_regions(city, list(config.extra_regions))
+    missing = (
+        missing_regions(analysis_gdf, network_buffer_m, acquire_regions, cache_dir=cache)
+        if city.is_us
+        else []
+    )
+    needed = sorted(set(acquire_regions) | set(missing))
+    return RegionPlan(
+        home_region=acquire_regions[0] if acquire_regions else None,
+        acquire_regions=acquire_regions,
+        needed_regions=needed,
+        missing_regions=missing,
+        network_buffer_m=network_buffer_m,
+    )
 
 
 # Role -> glob for the content-addressed files acquire_city writes into a directory.
 _INPUT_GLOBS: dict[str, str] = {
     "osm": "osm-*.pbf",
     "boundary": "boundary-*.geojson",
+    "analysis_boundary": "analysis_boundary-*.geojson",
     "census": "census-*.parquet",
     "lodes_main": "lodes_main-*.csv",
     "lodes_aux": "lodes_aux-*.csv",
@@ -574,4 +821,9 @@ def discover_inputs(datasets_dir: Path | str) -> dict[str, Path]:
         hits = sorted(d.glob(pattern))
         if hits:
             inputs[role] = hits[0]
+    # Identity acquisitions write no separate analysis-boundary file; the analysis
+    # boundary is then the fetched boundary itself. Fall back so stages that consume
+    # ``analysis_boundary`` always resolve.
+    if "analysis_boundary" not in inputs and "boundary" in inputs:
+        inputs["analysis_boundary"] = inputs["boundary"]
     return inputs

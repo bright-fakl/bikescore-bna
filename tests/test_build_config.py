@@ -6,9 +6,9 @@ so ``build_config("default")`` must serialize identically to ``build_config(None
 also proves the foundation port (config + decision + rules + attributes + destinations +
 scenarios) is complete — a missing rule/attribute/destination would perturb the serialization.
 
-The cross-repo check ``== bna-core`` is a split-time verification done out-of-band (both
-serialize to the same 43,704-char document); it is not committed because bna-core is the
-frozen oracle, not a test dependency.
+The cross-repo check ``== bna-core`` was a split-time verification done out-of-band (both
+serialize to the same 43,704-char document); it is not committed because bna-core is an
+external repo, not a test dependency.
 """
 
 from __future__ import annotations

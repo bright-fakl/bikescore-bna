@@ -42,7 +42,7 @@ scenario produced — the same key space the CLI's `--set` uses (e.g.
 
 ## The config tree
 
-`BNAConfig` holds a handful of top-level scalars plus eight typed sub-configs. Each stage
+`BNAConfig` holds a handful of top-level scalars plus nine typed sub-configs. Each stage
 reads only its own slice.
 
 | Sub-config | Type | Feeds | Selected fields |
@@ -55,11 +55,13 @@ reads only its own slice.
 | `scoring` | `ScoringConfig` | scores | `people`, `category_weights`, `population` |
 | `export` | `ExportConfig` | export | `base_dir` |
 | `cache` | `CacheConfig` | parse | `cache_dir` — where the clipped-PBF cache lives |
+| `boundary` | `BoundaryConfig` | acquire → parse, census, segment | `fill_holes`, `keep_largest_part`, `clip_shape`, `clip_size_m`, `convex_hull`, `override_geometry`, `network_buffer_m` (see [Boundary transforms](#boundary-transforms)) |
 
 Top-level scalars include `max_trip_distance` (2680 m — the reachability horizon),
 `block_road_buffer` / `block_road_min_length` / `block_boundary_overlap` (block↔road
-association), `exclude_water_blocks`, and the trail thresholds `min_path_length` /
-`min_bbox_length`.
+association), `exclude_water_blocks`, the trail thresholds `min_path_length` /
+`min_bbox_length`, and `extra_regions` (extra Geofabrik/state extracts to acquire when a
+boundary transform expands the extent — see [Boundary transforms](#boundary-transforms)).
 
 Three fields hold the **structural** layers a complete scenario supplies:
 
@@ -75,6 +77,40 @@ A scenario may declare `variables` — named values the rule sets reference by `
 — plus `required_variables`, names a run *must* supply. This lets a ruleset stay generic
 while a scenario (or `--set variables.x=…`) pins the numbers. A missing required variable
 fails `config.validate()` before any stage runs.
+
+## Boundary transforms
+
+The `boundary` sub-config reshapes the **analysis boundary** — the polygon `parse`,
+`census`, and `segment` actually consume — before scoring. Transforms are applied once, at
+[acquire](../how-it-works/data-acquisition.md#boundary-manipulation) time, by
+`prepare_boundary`, in the fixed order `keep_largest_part → fill_holes → clip` (with
+`make_valid` run unconditionally first to repair self-intersections). With no field set the
+transform is identity and the analysis boundary is byte-for-byte the fetched one, so default
+output — and [reference parity](../development/validation.md) — is unchanged.
+
+| Field | Type | Effect |
+|---|---|---|
+| `fill_holes` | `bool` | Rebuild each polygon from its exterior ring, absorbing interior enclave holes completely (predictable, not radius-dependent). |
+| `keep_largest_part` | `bool` | Drop detached exclaves/islands, keeping only the largest polygon of a MultiPolygon boundary. |
+| `clip_shape` | `"box" \| "circle" \| None` | Region-restrict to a shape centered on the boundary centroid, **intersected with** the real boundary (keeps realistic edges). Requires `clip_size_m`. |
+| `clip_size_m` | `float \| None` | Box side length / circle diameter, in metres. Required when `clip_shape` is set; must be positive. |
+| `convex_hull` | `bool` | Replace the boundary with its convex hull. **Extent-expanding.** |
+| `override_geometry` | path \| bbox \| `None` | Replace the fetched city boundary at the **source** — a GeoJSON/vector path or an inline WGS84 bbox `[minx, miny, maxx, maxy]`. Not a transform: the transforms above run on top of it. **Extent-expanding.** |
+| `network_buffer_m` | `float` | Buffer (m) applied to the analysis boundary when clipping the OSM road network **only** — never the scoring boundary. `0.0` = exact clip (default parity); `>0` is opt-in and **extent-expanding**. |
+
+**Subsetting vs. expanding.** `fill_holes`, `keep_largest_part`, and the box/circle clip
+either shrink the extent or fill interior holes, so they stay inside the already-downloaded
+regional data — no re-acquire. The three expanding knobs (`convex_hull`,
+`override_geometry`, a non-zero `network_buffer_m`) can push the analysis + clip extent past
+the fetched region(s). When they do, acquire's coverage guard requires the missing regions
+in the **top-level** `extra_regions` list (e.g. `extra_regions: ["maryland", "virginia"]`)
+and otherwise raises an actionable error naming them — no surprise downloads. Preview the
+plan with [`acquire --dry-run`](cli.md#acquire); the mechanics are covered under
+[Data acquisition → Boundary manipulation](../how-it-works/data-acquisition.md#boundary-manipulation).
+
+The original fetched boundary is always kept alongside the derived one for provenance, and
+the census stage additionally emits an inert [excluded-block layer](output-files.md#targets)
+so dropped water/out-of-boundary blocks are distinguishable from missing data.
 
 ## Validation
 

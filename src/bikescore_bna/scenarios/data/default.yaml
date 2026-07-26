@@ -5,10 +5,19 @@ config:
   globals:
     block_road_buffer: 15
     block_road_min_length: 30
+    extra_regions: []
     max_trip_distance: 2680
     min_bbox_length: 3300
     min_path_length: 4800
     output_srid: null
+  boundary:
+    fill_holes: false
+    keep_largest_part: false
+    convex_hull: false
+    clip_shape: null
+    clip_size_m: null
+    override_geometry: null
+    network_buffer_m: 0.0
   cache:
     cache_dir: cache
   city:

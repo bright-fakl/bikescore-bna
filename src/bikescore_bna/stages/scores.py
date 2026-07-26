@@ -31,7 +31,10 @@ def _piecewise_score(
     step3: float, score3: float,
 ) -> np.ndarray:
     """Vectorised piecewise linear ratio formula matching access_population.sql."""
-    ratio = np.where((np.isnan(h)) | (h == 0), np.nan, lo / h)
+    # `lo / h` is evaluated for all elements before np.where masks the h == 0
+    # blocks to NaN, so the 0/0 divide warning it raises is harmless here.
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ratio = np.where((np.isnan(h)) | (h == 0), np.nan, lo / h)
     return np.select(
         [
             np.isnan(ratio),
@@ -67,7 +70,12 @@ def _destination_score_vec(
     h = high.astype(float)
     lo = low.astype(float)
 
-    return np.where(
+    # np.where evaluates every branch eagerly, so `lo / h` is computed for all
+    # elements — including h == 0 blocks — before the outer guard discards them.
+    # Those discarded 0/0 cells are the only source of the "invalid value in
+    # divide" RuntimeWarning; suppress it since the result is masked to NaN below.
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(
         (h == 0) | np.isnan(h), np.nan,
         np.where(lo == 0, 0.0,
         np.where(h == lo, float(max_score),
@@ -517,8 +525,17 @@ def compute_scores(
         overall_num = overall_num + inter_w * cat_contrib
         overall_den = overall_den + inter_w * any_reachable.astype(float)
 
+    # Blocks with no connectivity get a NULL overall score, not 0. A block is
+    # only a connectivity source (and thus scorable) if it has roads; roadless /
+    # disconnected blocks never appear as a source, so their pop_high_stress is
+    # NaN (a connected block that reaches only zero-population targets has
+    # pop_high_stress == 0, not NaN — so this discriminates cleanly). Without
+    # this gate, pop_score.fillna(0) and the fillna(0) high_stress counts collapse
+    # such blocks to 100 * 0 / people_w = 0, painting "no data" as "worst score"
+    # and contradicting this function's documented contract.
+    no_conn = result["pop_high_stress"].isna().to_numpy()
     result["overall_score"] = np.where(
-        overall_den == 0, np.nan,
+        no_conn | (overall_den == 0), np.nan,
         100.0 * overall_num / overall_den,
     )
 
