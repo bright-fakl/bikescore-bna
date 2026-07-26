@@ -1,10 +1,9 @@
 # Validation
 
 bikescore-bna validates its output **stage by stage** against a *reference directory* — a
-ground-truth set of per-stage parquets. The repo ships one: `tests/oracle/aspen`, the
-frozen reference output for Aspen, Colorado (the maintainer's manual validation city).
-References can also be exported from [brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer),
-the original SQL/PostGIS implementation.
+ground-truth set of per-stage parquets. References are exported from
+[brokenspoke-analyzer](https://github.com/PeopleForBikes/brokenspoke-analyzer), the
+original SQL/PostGIS implementation.
 
 A reference directory holds one parquet per stage output:
 
@@ -22,7 +21,7 @@ A reference directory holds one parquet per stage output:
 Score a city and compare every stage output against the reference:
 
 ```bash
-bikescore-bna validate <city> --reference tests/oracle/aspen
+bikescore-bna validate <city> --reference path/to/reference
 ```
 
 `<city>` is a path to a city directory (its inputs are read from `<city>/datasets`, or
@@ -54,7 +53,7 @@ from bikescore_bna.deviations import KNOWN_DEVIATIONS
 result = score_city(discover_inputs("aspen-colorado/datasets"), build_config("default"))
 
 for sp in validate_result(
-    result, "tests/oracle/aspen", city="aspen-colorado", deviations=KNOWN_DEVIATIONS
+    result, "path/to/reference", city="aspen-colorado", deviations=KNOWN_DEVIATIONS
 ):
     if sp.report is None:
         continue  # stage skipped (reference/computed file absent)

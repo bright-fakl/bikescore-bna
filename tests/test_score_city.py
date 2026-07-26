@@ -3,8 +3,7 @@
 These exercise the driver's *control flow* — temp-dir creation, ordered execution,
 ``pinned`` passthrough, ``to_stage`` stop, and validation — against a **synthetic**
 ``PIPELINE`` (monkeypatched), so they stay independent of the real stage set that
-Phase 38d populates. End-to-end parity against the Aspen oracle lives in
-``tests/test_stages_parity.py``. No SQLite, no hashing, no run store.
+Phase 38d populates. No SQLite, no hashing, no run store.
 """
 
 from __future__ import annotations

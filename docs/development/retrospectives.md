@@ -7,10 +7,10 @@ repo (`phases/38*.md`); the ones that shape how the core is built are:
 ## The split
 
 - **Identity, not "within tolerance."** The crux gate (38f) asserts the DB-free
-  `score_city` output is *identical* to the oracle — zero differing rows and zero rows
-  needing a known-deviation to match — not merely inside a deviation budget. Anything
-  downstream of the `attributes` stage must reproduce the oracle value-for-value; a diff
-  is a port bug to fix or escalate, never to paper over.
+  `score_city` output is *identical* to `bna-core`'s own output — zero differing rows and
+  zero rows needing a known-deviation to match — not merely inside a deviation budget.
+  Anything downstream of the `attributes` stage must reproduce `bna-core` value-for-value;
+  a diff is a port bug to fix or escalate, never to paper over.
 - **The stage seam is one primitive.** `run_stage` ("assemble input paths, call the
   stage, track the output dir") is shared by `score_city` and the app engine, so the two
   execution paths cannot drift. The app wraps it with hashing / reuse / persistence; the
@@ -31,14 +31,15 @@ correctness over reuse.
 ## Ports leave clutter behind
 
 The core is a clean-slate port, not a copy: dead code, stale scenarios, and accumulated
-cruft were left in `bna-core` by construction. The check on each stage was the oracle
-parquet, so a faithful port could be *smaller* than its source without losing behaviour.
+cruft were left in `bna-core` by construction. The check on each stage was the `bna-core`
+reference parquet, so a faithful port could be *smaller* than its source without losing
+behaviour.
 
 ## Docs and tooling
 
 - **ruff is the gate; pyright is advisory.** CI fails on ruff findings; type errors are
   informational. Keep new code ruff-clean before committing.
-- **The oracle baseline is gitignored** — it is split-time scaffolding regenerated
-  locally, so parity tests *skip* (not fail) on a cold clone without it. The durable
+- **Split-time reference baselines were gitignored** — local scaffolding regenerated on
+  demand, so parity tests *skip* (not fail) on a cold clone without them. The durable
   parity mechanism carried forward is the brokenspoke-analyzer reference-parquet
   comparison.

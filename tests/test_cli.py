@@ -1,30 +1,21 @@
-"""A7 — ``bikescore-bna`` CLI: pure-helper units, command wiring, and the score gate.
+"""A7 — ``bikescore-bna`` CLI: pure-helper units and command wiring.
 
-The headline test (``test_score_reproduces_oracle``) is the A7 gate: the ``score``
-command on the Aspen workspace reproduces the A5 ``scores`` table identically. It skips
-when the frozen workspace (city.toml + datasets/) is absent. Everything else is CI-safe:
-helper coercion, error paths (exit code 2), ``scenarios`` output, and the ``acquire``
-command with a monkeypatched, network-free provider call.
+All CI-safe: helper coercion, error paths (exit code 2), ``scenarios`` output, and the
+``acquire`` command with a monkeypatched, network-free provider call.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
 import pytest
 import typer
 from typer.testing import CliRunner
 
 import bikescore_bna.cli as cli
 from bikescore_bna.cli import _coerce, _parse_overrides, _scenario_arg, app
-from bikescore_bna.deviations import KNOWN_DEVIATIONS
-from bikescore_bna.validation import compare_dataframes
 
 runner = CliRunner()
-
-_WORKSPACE = Path("/home/fabian/Projects/RideScore/BNA/bna-core-projects/aspen-colorado")
-ORACLE = Path(__file__).resolve().parent / "oracle" / "aspen"
 
 
 # ── Pure helpers ─────────────────────────────────────────────────────────────
@@ -106,32 +97,6 @@ def test_acquire_command_prints_table(tmp_path: Path, monkeypatch: pytest.Monkey
     assert captured["city"] == "Aspen"
     assert str(captured["pbf_cache_dir"]) == str(tmp_path / "pbf")
     assert "osm" in result.stdout and "boundary" in result.stdout
-
-
-@pytest.mark.skipif(
-    not (_WORKSPACE / "city.toml").exists() or not (_WORKSPACE / "datasets").is_dir(),
-    reason="Aspen workspace (city.toml + datasets/) absent",
-)
-def test_score_reproduces_oracle(tmp_path: Path) -> None:
-    out = tmp_path / "scores.parquet"
-    result = runner.invoke(
-        app,
-        ["score", str(_WORKSPACE), "--scenario", "default",
-         "--out-dir", str(tmp_path / "run"), "--out", str(out)],
-    )
-    assert result.exit_code == 0, result.stdout
-    assert out.exists()
-    # stage outputs persist under the chosen --out-dir (not a discarded temp dir).
-    assert (tmp_path / "run" / "scores" / "scores.parquet").exists()
-
-    computed = pd.read_parquet(out)
-    reference = pd.read_parquet(ORACLE / "scores" / "scores.parquet")
-    cols = [c for c in reference.columns if c != "geoid20" and c in computed.columns]
-    report = compare_dataframes(
-        computed, reference, stage="scores", city="aspen-colorado",
-        key_col="geoid20", columns=cols, deviations=KNOWN_DEVIATIONS,
-    )
-    assert report.passed and report.rows_differing == 0
 
 
 # ── scenario show ─────────────────────────────────────────────────────────────
@@ -287,17 +252,3 @@ def test_validate_missing_reference_exits_2(tmp_path: Path) -> None:
         app, ["validate", str(tmp_path), "--reference", str(tmp_path / "no-such-ref")]
     )
     assert result.exit_code == 2
-
-
-@pytest.mark.skipif(
-    not (_WORKSPACE / "city.toml").exists() or not (_WORKSPACE / "datasets").is_dir(),
-    reason="Aspen workspace (city.toml + datasets/) absent",
-)
-def test_validate_stress_matches_oracle() -> None:
-    result = runner.invoke(
-        app,
-        ["validate", str(_WORKSPACE), "--reference", str(ORACLE), "--stage", "stress"],
-    )
-    assert result.exit_code == 0, result.stdout
-    assert "PASS" in result.stdout
-    assert "FAIL" not in result.stdout

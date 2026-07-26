@@ -19,7 +19,7 @@ fallback works but is ~8× slower. See [Installation](../installation.md).
 
 | Tool | Command | Notes |
 |---|---|---|
-| Tests | `uv run pytest` | markers `slow`, `integration`, `oracle`, `unit`; the default `addopts` deselects `slow` + `integration` |
+| Tests | `uv run pytest` | markers `slow`, `integration`, `unit`; the default `addopts` deselects `slow` + `integration` |
 | Lint | `uv run ruff check` | line length 100; **ruff is the gate** — CI fails on findings |
 | Format | `uv run ruff format` | not a gate, but keep the diff clean |
 | Types | `uv run pyright` | advisory, not a merge gate |

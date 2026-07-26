@@ -1,8 +1,8 @@
 """Stage-by-stage parity of a ``score_city`` result against a reference directory.
 
 A *reference directory* holds one parquet per stage output at
-``<reference_dir>/<stage>/<file>.parquet`` — the layout of ``tests/oracle/aspen`` and of
-brokenspoke-analyzer exports. :func:`validate_result` runs each stage's computed output
+``<reference_dir>/<stage>/<file>.parquet`` — the layout of brokenspoke-analyzer exports.
+:func:`validate_result` runs each stage's computed output
 through :func:`bikescore_bna.validation.compare_dataframes` with the right row-alignment
 strategy and returns a report per stage.
 

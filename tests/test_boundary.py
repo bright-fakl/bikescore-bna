@@ -1,7 +1,7 @@
 """Phase 1 boundary-manipulation tests: transforms, excluded-block layer, wiring.
 
 Self-contained (crafted fixtures, no Aspen datasets) so they run in normal CI. The
-central guarantee under test is oracle parity: with no boundary transform configured,
+central guarantee under test is default parity: with no boundary transform configured,
 the analysis boundary is the fetched boundary and the scored ``census_blocks`` output
 is byte-for-byte unchanged. The excluded-block layer and analysis-boundary export are
 inert additions the scoring path never sees.

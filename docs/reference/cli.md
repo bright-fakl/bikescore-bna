@@ -169,11 +169,11 @@ $ bikescore-bna export-list
 ## `validate`
 
 Score a city and compare each stage output against a reference directory (the
-`<stage>/<file>.parquet` layout of `tests/oracle/aspen` or a brokenspoke-analyzer
-export). Prints a per-stage pass/fail table and exits non-zero if any stage differs.
+`<stage>/<file>.parquet` layout of a brokenspoke-analyzer export). Prints a per-stage
+pass/fail table and exits non-zero if any stage differs.
 
 ```console
-$ bikescore-bna validate <city> --reference tests/oracle/aspen [--stage stress]
+$ bikescore-bna validate <city> --reference path/to/reference [--stage stress]
 ```
 
 | option | default | meaning |

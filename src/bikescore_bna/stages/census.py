@@ -175,7 +175,7 @@ def load_census_blocks_with_excluded(
     """Load census blocks, returning both the ``included`` set and the excluded blocks.
 
     ``included`` is byte-for-byte what :func:`load_census_blocks` returns (via the
-    unchanged :func:`filter_census_blocks`), preserving oracle parity. ``excluded`` is
+    unchanged :func:`filter_census_blocks`), preserving default parity. ``excluded`` is
     ``None`` for the synthetic (non-US) path or when nothing is excluded; otherwise it
     carries geometry + ``block_class`` + the key census attrs.
     """
