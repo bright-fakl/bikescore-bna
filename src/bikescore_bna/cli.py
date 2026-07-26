@@ -495,7 +495,7 @@ def validate_cmd(
     reference: Annotated[
         Path,
         typer.Option("--reference", "-r",
-                     help="Reference dir with <stage>/<file>.parquet (e.g. tests/oracle/aspen)."),
+                     help="Reference dir with <stage>/<file>.parquet (e.g. a brokenspoke-analyzer export)."),
     ],
     stage: Annotated[
         str | None,
@@ -528,9 +528,9 @@ def validate_cmd(
 ) -> None:
     """Score a city and compare each stage output against a reference directory.
 
-    The reference holds ``<stage>/<file>.parquet`` (the tests/oracle/aspen layout, or a
-    brokenspoke-analyzer export). Prints a per-stage pass/fail table and exits non-zero if
-    any stage differs. Use --stage to check one stage (a faster partial run).
+    The reference holds ``<stage>/<file>.parquet`` (e.g. a brokenspoke-analyzer export).
+    Prints a per-stage pass/fail table and exits non-zero if any stage differs. Use
+    --stage to check one stage (a faster partial run).
     """
     from bikescore_bna.deviations import KNOWN_DEVIATIONS
     from bikescore_bna.parity import validate_result

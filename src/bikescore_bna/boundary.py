@@ -9,7 +9,7 @@ consume. Transforms run in a fixed order:
 ``make_valid`` is unconditional hygiene, but is a no-op on already-valid input. When
 no transform is configured *and* the source is valid, :func:`prepare_boundary` returns
 the **same object** unchanged — the caller can then reuse the source file byte-for-byte
-(oracle parity: the analysis boundary is identical to the fetched one).
+(default parity: the analysis boundary is identical to the fetched one).
 
 The subsetting / hole-filling transforms (``keep_largest_part``, ``fill_holes``, the
 box/circle clip) each shrink the extent or fill interior holes, so the result stays

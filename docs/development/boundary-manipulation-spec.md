@@ -25,7 +25,7 @@ data requires re-clipping — and possibly re-downloading — OSM, census, and L
 ## Decisions locked in
 
 - **Excluded-block layer is always emitted** as a *separate* export layer with a class
-  code. It is inert: the scoring pipeline never sees it, so scores and oracle parity
+  code. It is inert: the scoring pipeline never sees it, so scores and default parity
   are unchanged. No config flag — an inert artifact does not need to be opt-in.
 - **`make_valid` is always-on** boundary hygiene.
 - **Box-clip is intersected with the real boundary** (keeps realistic city edges).
@@ -96,7 +96,7 @@ Wiring: acquire writes both (`dataset:boundary` = original for provenance,
 `dataset:analysis_boundary` = derived); `parse`/`census`/`segment` are repointed to the
 analysis artifact. With no transforms configured, `prepare_boundary` is identity, the
 two artifacts are equal, the extra export layer is suppressed, and all stage outputs are
-unchanged — preserving oracle parity.
+unchanged — preserving default parity.
 
 ### Buffering and holes
 
@@ -236,13 +236,13 @@ Reality check: the mechanism exists (`pre_clip_pbf` + `_buffered_wgs84`) but the
 call site passes `0.0`** (`acquire.py:493`), so the road network is clipped to the
 **exact** boundary — the only spillover is `complete_ways` keeping border-*crossing*
 ways whole. So there is currently **no buffer margin**, which is consistent with the
-oracle baseline and is a plausible contributor to the edge-score depression noted in the
-scores investigation.
+default (exact-clip) behaviour and is a plausible contributor to the edge-score
+depression noted in the scores investigation.
 
 - Thread `network_buffer_m` from config to the `pre_clip_pbf` call (replacing the
   hard-coded `0.0`), and clip the **analysis** boundary (not the original).
 - **Default `0.0`** — a non-zero buffer changes the clipped PBF → the parsed network →
-  scores, so it **deviates from the oracle** and must be opt-in.
+  scores, so it **deviates from default output** and must be opt-in.
 - **A non-zero buffer expands the clip extent and therefore MUST go through the region
   coverage check** (§9). This applies to *any* buffer value, including whatever the
   existing mechanism would produce — the buffered extent, not the bare boundary, is what
@@ -262,7 +262,7 @@ consequences to handle:
   `_clip_with_pyosmium` does a **bbox** clip (pass 1 filters only on
   `boundary_geom.bounds`, no polygon test). Since `bbox ⊇ polygon` the pyosmium path
   over-includes corner roads and diverges from the CLI path — so the network depends on
-  whether the `osmium` binary is present. Dormant when osmium CLI is used (oracle/CI),
+  whether the `osmium` binary is present. Dormant when osmium CLI is used (the default in CI),
   but wrong otherwise, and a buffer widens the bbox and amplifies it. **Fix: give the
   pyosmium path a real polygon test** (not merely document it).
 - **`complete_ways` over-reach — bounded downstream.** A long way with one node inside
@@ -363,7 +363,7 @@ boundary:
   clip_shape: "box" | "circle" | None = None  # region-restrict shape (∩ boundary)
   clip_size_m: float | None = None            # box side / circle diameter, centered on centroid
   override_geometry: path | bbox | None = None  # SOURCE replacement, not a transform
-  network_buffer_m: float = 0.0         # 0.0 = exact clip (oracle parity); >0 opt-in,
+  network_buffer_m: float = 0.0         # 0.0 = exact clip (default parity); >0 opt-in,
                                         #   expands extent → triggers coverage check (§9)
 extra_regions: list[str] = []           # Geofabrik/state identifiers for multi-region
 ```
@@ -381,4 +381,4 @@ this pass wires config + `city.toml`.
 ## Out of scope / non-goals
 
 - Changing what gets **scored**: excluded blocks stay out of scoring; parity with the
-  frozen oracle is preserved when no transform is configured.
+  default output is preserved when no transform is configured.

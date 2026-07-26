@@ -94,8 +94,6 @@ packages = ["src/bikescore_bna"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-# tests/oracle/ is split-time scaffolding (gitignored, never shipped) — don't lint it.
-extend-exclude = ["tests/oracle"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "RUF", "ANN"]
@@ -124,7 +122,6 @@ testpaths = ["tests"]
 addopts = "-m \"not slow and not integration\""
 markers = [
     "slow: heavier parity/integration checks — deselect with -m 'not slow'",
-    "oracle: requires the committed Aspen oracle baseline in tests/oracle/",
     "unit: pure unit test with no file I/O",
     "integration: requires local cached data — not run in CI",
 ]

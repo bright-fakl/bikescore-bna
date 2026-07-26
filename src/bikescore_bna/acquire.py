@@ -613,7 +613,7 @@ class UsCensusLodesProvider:
             result["boundary"] = self._store(ac, "boundary", boundary_tmp, ".geojson")
 
             # Analysis boundary: prepare_boundary transforms; identity (same file)
-            # when no transform is configured, preserving oracle parity.
+            # when no transform is configured, preserving default parity.
             analysis_gdf = boundary_gdf
             if config is not None:
                 from bikescore_bna.boundary import prepare_boundary

@@ -86,7 +86,7 @@ The `boundary` sub-config reshapes the **analysis boundary** — the polygon `pa
 `prepare_boundary`, in the fixed order `keep_largest_part → fill_holes → clip` (with
 `make_valid` run unconditionally first to repair self-intersections). With no field set the
 transform is identity and the analysis boundary is byte-for-byte the fetched one, so default
-output — and [oracle parity](../development/validation.md) — is unchanged.
+output — and [reference parity](../development/validation.md) — is unchanged.
 
 | Field | Type | Effect |
 |---|---|---|
@@ -96,7 +96,7 @@ output — and [oracle parity](../development/validation.md) — is unchanged.
 | `clip_size_m` | `float \| None` | Box side length / circle diameter, in metres. Required when `clip_shape` is set; must be positive. |
 | `convex_hull` | `bool` | Replace the boundary with its convex hull. **Extent-expanding.** |
 | `override_geometry` | path \| bbox \| `None` | Replace the fetched city boundary at the **source** — a GeoJSON/vector path or an inline WGS84 bbox `[minx, miny, maxx, maxy]`. Not a transform: the transforms above run on top of it. **Extent-expanding.** |
-| `network_buffer_m` | `float` | Buffer (m) applied to the analysis boundary when clipping the OSM road network **only** — never the scoring boundary. `0.0` = exact clip (oracle parity); `>0` is opt-in and **extent-expanding**. |
+| `network_buffer_m` | `float` | Buffer (m) applied to the analysis boundary when clipping the OSM road network **only** — never the scoring boundary. `0.0` = exact clip (default parity); `>0` is opt-in and **extent-expanding**. |
 
 **Subsetting vs. expanding.** `fill_holes`, `keep_largest_part`, and the box/circle clip
 either shrink the extent or fill interior holes, so they stay inside the already-downloaded

@@ -286,7 +286,7 @@ class BoundaryConfig:
     keep_largest_part → fill_holes → clip — on the fetched city boundary to produce
     the *analysis* boundary that ``parse`` / ``census`` / ``segment`` consume. With no
     field set the transform is identity and the analysis boundary is byte-for-byte the
-    fetched one (oracle parity preserved).
+    fetched one (default parity preserved).
 
     Subsetting/hole-filling transforms (``fill_holes``, ``keep_largest_part``, the
     box/circle clip) either shrink the extent or fill interior holes, so they stay
@@ -325,9 +325,9 @@ class BoundaryConfig:
 
     network_buffer_m: float = 0.0
     """Buffer (metres) applied to the analysis boundary when clipping the OSM road
-    network only (never the scoring boundary). ``0.0`` = exact clip (oracle parity); a
-    positive value is opt-in, expands the clip extent, changes the parsed network/scores
-    (deviating from the oracle), and routes through acquire's coverage detector (§9)."""
+    network only (never the scoring boundary). ``0.0`` = exact clip (default parity); a
+    positive value is opt-in, expands the clip extent, changes the parsed network/scores,
+    and routes through acquire's coverage detector (§9)."""
 
     def validate(self) -> None:
         """Reject an inconsistent clip spec / bad buffer / malformed override bbox."""

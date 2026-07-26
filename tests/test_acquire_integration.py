@@ -6,13 +6,10 @@ LODES, then drives the full pipeline. Marked ``integration`` + ``slow`` so it is
 deselected by the default ``-m "not slow and not integration"`` addopts — run it
 explicitly with ``uv run pytest -m integration``.
 
-Reproducibility caveat (why this is *not* a byte-exact A5 gate): the Geofabrik OSM
-extract, the pygris boundary/census, and LODES all evolve upstream, so a re-acquire
-today need not reproduce the frozen A0 oracle byte-for-byte. Per the project's manual
-Aspen validation standard, this test asserts the acquire → score path *runs clean and
-produces a well-formed scores table*; the deterministic identity gate lives in
-``test_acquire.py::test_acquire_city_output_scores_to_oracle`` (stub provider) and in
-``test_score_city_e2e.py`` (frozen oracle inputs).
+Reproducibility caveat (why this is *not* a byte-exact gate): the Geofabrik OSM extract,
+the pygris boundary/census, and LODES all evolve upstream, so a re-acquire today need not
+reproduce any frozen reference byte-for-byte. This test asserts the acquire → score path
+*runs clean and produces a well-formed scores table*.
 
 Point the shared PBF cache at a directory holding the regional extract to avoid the
 ~500 MB download: ``BIKESCORE_PBF_CACHE=/path/to/pbf`` (default: the global settings
