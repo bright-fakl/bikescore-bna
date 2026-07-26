@@ -1,7 +1,8 @@
 # Neighborhood scores
 
-The neighborhood stage aggregates per-block access scores into city-level summary statistics.
-These are the numbers that appear in PeopleForBikes city rankings.
+The earlier stages score individual neighbourhoods. This final stage aggregates
+those per-block scores into city-level summary statistics — the overall 0–100
+rating and per-category scores that appear in PeopleForBikes city rankings.
 
 ## The headline BNA score
 
@@ -89,22 +90,7 @@ Exceptions:
 - `population_total`: no normalization (raw count)
 - `total_miles_*`: rounded to 1 decimal place
 
-## Comparison with brokenspoke-analyzer
-
-brokenspoke computes neighborhood-level aggregates with:
-
-| SQL file | What it does |
-|---|---|
-| `connectivity/category_scores.sql` | Population-weighted category and overall scores |
-| `connectivity/score_inputs.sql` | 132-row score-inputs table (percentiles, averages) |
-| `connectivity/overall_scores.sql` | City-level headline scores, mileage statistics |
-| `features/calculate_mileage.sql` | Total miles of each bike infrastructure type |
-
-bikescore-bna implements the same aggregation logic in `stages/neighborhood.py`.
-The mileage computation mirrors `calculate_mileage.sql`. The score-inputs table
-structure (132 rows, `use_*` flag columns) matches the brokenspoke schema
-exactly.
-
-There are no known deviations in the neighborhood stage. All column values
-match the brokenspoke reference to four decimal places on the Washington DC
-validation city.
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

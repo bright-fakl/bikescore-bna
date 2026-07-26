@@ -102,40 +102,11 @@ With custom stress=2 rules in place, this setting restricts the comfortable netw
 
 ## Why only values 1 and 3?
 
-The BNA SQL reference assigns only values 1 and 3 — value 2 is never produced by any default rule. This is intentional: BNA treats comfort as a binary distinction for most analyses. The intermediate value 2 is available for custom extensions when a finer split is needed.
+The default rules assign only values 1 and 3 — value 2 is never produced by any default rule. This is intentional: BNA treats comfort as a binary distinction for most analyses. The intermediate value 2 is available for custom extensions when a finer split is needed.
 
 When you add a custom rule that produces stress=2, `StressConfig.n_levels` automatically adjusts to accommodate the new value.
 
-## Comparison with brokenspoke-analyzer
-
-brokenspoke computes stress through a sequence of SQL UPDATE statements in
-`compute.stress()`. Each file handles one road class or intersection type; most
-take parameterised speed and lane defaults via `psql -v` variables:
-
-| SQL file | What it does |
-|---|---|
-| `stress/stress_motorway-trunk.sql` | Motorways and trunks — always high stress |
-| `stress/stress_segments_higher_order.sql` | Primary, secondary, tertiary segment stress (called 3×) |
-| `stress/stress_segments_lower_order.sql` | Residential, unclassified segment stress |
-| `stress/stress_segments_lower_order_res.sql` | Residential segment stress (low-speed variant) |
-| `stress/stress_living_street.sql` | Living streets — always low stress |
-| `stress/stress_path.sql` | Off-street paths — always low stress |
-| `stress/stress_track.sql` | Tracks (grade1) — always low stress |
-| `stress/stress_one_way_reset.sql` | Reset stress for one-way roads without reverse infrastructure |
-| `stress/stress_motorway-trunk_ints.sql` | Intersection stress for motorway/trunk crossings |
-| `stress/stress_primary_ints.sql` | Intersection stress for primary road crossings |
-| `stress/stress_secondary_ints.sql` | Intersection stress for secondary road crossings |
-| `stress/stress_tertiary_ints.sql` | Intersection stress for tertiary road crossings |
-| `stress/stress_lesser_ints.sql` | Intersection stress for lower-order road crossings |
-| `stress/stress_link_ints.sql` | Reset `_link` roads to low intersection stress |
-
-bikescore-bna replaces this sequence with a rules engine (`stages/stress.py`) that
-applies the same logic from YAML rule sets (`bikescore-bna/rules/data/segment_stress.yaml`
-and `intersection_stress.yaml`). The default rules encode the same conditions as
-the SQL files above, producing identical results on the Washington DC validation
-city. There are no known deviations in the stress stage.
-
-The key structural difference is that brokenspoke embeds speed/lane defaults
-directly as SQL substitution parameters, while bikescore-bna's imputation stage
-already fills these values before stress runs — so stress rules operate on
-concrete column values rather than SQL-level defaults.
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

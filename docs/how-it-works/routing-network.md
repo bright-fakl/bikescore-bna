@@ -1,9 +1,10 @@
 # Routing network
 
-The BNA pipeline measures how easily cyclists can reach destinations from any census
-block. To answer that question, it needs a map of the road network that a cyclist
-might use — and it needs two versions of that map: one for every road, and one for
-only the comfortable roads.
+Once the roads have been [split into segments](segmenting.md) and each segment has
+a [stress level](stress.md), the **graph** stage assembles them into a routable map
+— the structure the connectivity and scoring stages search to find what each block
+can reach. It builds two versions of that map: one for every road, and one for only
+the comfortable roads.
 
 ## What a routing graph is
 
@@ -69,54 +70,6 @@ remain in the graph so that a route from a city block can pass through a neighbo
 suburb and return — but no block in that suburb is ever counted as a destination or
 a source.
 
-## Topology splitting: one intersection, one segment
-
-OSM stores roads as continuous linestrings (called *ways*) that may span multiple
-intersections. A single way might run for a kilometre and pass through four traffic
-lights without any break in the underlying data. Before routing, each way must be
-split at every intersection node into individual **segments** — the atomic units of
-the routing graph.
-
-This process is called *topology splitting* and mirrors what osm2pgrouting does for
-the SQL reference implementation. A node is an intersection if it appears in more
-than one way. For each way, bikescore-bna walks the node sequence and splits whenever it
-reaches an intersection node, carrying that node forward as the start of the next
-segment.
-
-The result: each segment connects exactly two nodes (start and end), has a unique
-segment ID, and inherits all road attributes (speed limit, bike infrastructure,
-stress level, etc.) from its parent way.
-
-### End nodes as routing identifiers
-
-Every segment is identified in the routing graph by its **end node** (`road_id =
-end_node_id`). This matches the SQL reference's `neighborhood_ways_net_vert` table,
-where each "vert" (vertex) corresponds to the target end of a road segment.
-
-Using only the end node as the segment identifier is intentional. Using both start
-and end nodes would create ~5% extra connectivity pairs, inflating scores.
-
-### Recreational trails
-
-Some path segments form recreational trails — long, spread-out networks of cycling
-paths that constitute genuine cycling destinations (not just short connectors).
-
-After topology splitting, bikescore-bna groups connected path segments into clusters using
-union-find on shared node IDs. Each cluster that is long enough and geometrically
-spread-out enough qualifies as a trail for recreational scoring.
-
-Two thresholds filter the clusters:
-
-- **`min_path_length = 4800 m`** — the total length of all segments in the cluster.
-  Very short clusters (parking lot bike racks, short connecting paths) are excluded.
-- **`min_bbox_length = 3300 m`** — the diagonal of the bounding box of the cluster
-  geometry. This filters paths that loop back on themselves: a circular loop of
-  5 km still has a small bounding box if it doesn't go anywhere new, so it fails
-  this check.
-
-Together these two thresholds select linear trail networks (rail trails, greenways,
-riverside paths) while excluding short connectors and circular loops.
-
 ## The configurable stress threshold
 
 The default stress threshold for the low-stress graph is **1**, matching the original
@@ -132,55 +85,7 @@ Additional graphs at extra thresholds can be built simultaneously using
 `BNAConfig.graph.extra_thresholds`. Each extra threshold produces an additional cost
 column in the connectivity output for research and comparison purposes.
 
-## Comparison with brokenspoke-analyzer
-
-brokenspoke builds the routing graph through two tools and one SQL script:
-
-| Step | Tool / file | What it does |
-|---|---|---|
-| Topology splitting | `osm2pgrouting` | Splits ways at intersections, builds `neighborhood_ways_net_link` and `neighborhood_ways_net_vert` tables |
-| Road–block association | `connectivity/census_blocks.sql` | Associates road segments with census blocks using a 15 m buffer |
-| Graph construction | `connectivity/build_network.sql` | Creates the pgRouting network table used by reachable-roads queries |
-
-bikescore-bna replaces these with:
-
-| bikescore-bna file | What it does |
-|---|---|
-| `stages/segment.py` | Topology splitting (pure Python; mirrors osm2pgrouting output) |
-| `stages/graph.py` | Builds scipy CSR sparse matrices for high-stress and low-stress routing |
-
-Two deviations arise from differences in how the two implementations handle
-topology:
-
-- **[§2a Topology-ordering orphan roads](deviations.md#2a-topology-ordering-orphan-roads)** —
-  brokenspoke splits topology *before* dropping unclassified roads, so isolated
-  road clusters that connect only to deleted ways can pass the orphan check.
-  bikescore-bna classifies first, so these clusters are correctly identified as
-  dead ends.
-- **[§3a Boundary polygon clip vs. bounding-box truncation](deviations.md#3a-boundary-polygon-clip-vs-bounding-box-truncation)** —
-  brokenspoke's vestigial `osmconvert -b=bbox --drop-broken-refs` step truncates
-  road geometries at the rectangular census-block bounding box, shortening segments
-  that cross the bbox edge. bikescore-bna has no bbox step, so these roads retain their
-  full geometry.
-
-### Buffer zone
-
-Both pipelines include a routing buffer zone — road segments outside the city
-boundary that cyclists near the edge can use to route through neighbouring areas.
-The buffer zone comes from roads that physically cross the city boundary: osmium's
-`complete_ways` strategy (used by both brokenspoke and bikescore-bna) preserves the
-full geometry of such roads, including nodes outside the polygon.
-
-In brokenspoke, after osm2pgrouting splits those roads into individual topology
-segments, `clip_osm.sql` retains outside segments within `max_trip_distance`
-(2,680 m) of the city boundary and deletes the rest. Only the city-specific
-osmium extract is in the database at this point — not the full regional dataset.
-
-In bikescore-bna, the clip stage keeps whole way objects that intersect the buffered
-boundary — nodes are not trimmed at this point. The segment stage then splits ways
-at intersection nodes and at the exact city boundary crossing point (inserting
-virtual nodes), and removes outside dead-end chains. Roads *entirely* outside the
-city (no node inside the polygon) are absent from both graphs, since osmium never
-includes them. See
-[Differences from brokenspoke-analyzer — Clipping](deviations.md#clipping-approaches)
-for a detailed comparison.
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

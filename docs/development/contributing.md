@@ -53,7 +53,7 @@ Corollaries `bikescore-bna` keeps to:
 
 ## Correctness bar
 
-Ground truth is the SQL reference (`brokenspoke-analyzer`); the algorithm is pinned to a
-frozen reference output on Aspen. Any behavioural change must be validated — see
+Ground truth is the SQL reference (`brokenspoke-analyzer`). Any behavioural change must
+be validated — see
 [Validation & parity](validation.md). When the spec and the SQL reference disagree, the
 SQL reference wins.

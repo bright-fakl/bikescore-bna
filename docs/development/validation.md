@@ -85,5 +85,5 @@ Numeric columns compare exactly by default (`compare_dataframes(tolerance=...)` 
 it). Known permanent divergences from the SQL reference live in `bikescore_bna.deviations`
 (`KNOWN_DEVIATIONS`) and are excluded from the pass/fail decision when passed in.
 
-See [Differences from brokenspoke-analyzer](../how-it-works/deviations.md) for the full
+See [Differences from brokenspoke-analyzer](../differences/deviations.md) for the full
 list of accepted deviations and the reasoning behind each one.

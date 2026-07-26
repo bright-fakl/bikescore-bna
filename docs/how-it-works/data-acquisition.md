@@ -1,8 +1,9 @@
 # Data acquisition
 
-`bikescore-bna` scores a city from five raw inputs. [`acquire_city`](../reference/api.md)
-fetches all of them, database-free, and returns the `dict[str, Path]` that
-[`score_city`](../reference/api.md) consumes.
+Before it can score a city, `bikescore-bna` needs data *about* that city: its
+boundary, its roads, and how many people live and work there. The **acquire**
+step gathers these files — five raw inputs, database-free — and returns the
+`dict[str, Path]` that [`score_city`](../reference/api.md) consumes.
 
 ```python
 from bikescore_bna import acquire_city, CityIdentity
@@ -18,7 +19,7 @@ inputs = acquire_city(city, "./data")
 | input | source | notes |
 |---|---|---|
 | `boundary` | US Census (via `pygris`) for US cities; Nominatim otherwise | GeoJSON polygon in EPSG:4326 |
-| `osm` | [Geofabrik](https://download.geofabrik.de) regional extract, **clipped to the boundary** | see [clipping](deviations.md#clipping-approaches) |
+| `osm` | [Geofabrik](https://download.geofabrik.de) regional extract, **clipped to the boundary** | see [clipping](../differences/deviations.md#clipping-approaches) |
 | `census` | US Census 2020 blocks (via `pygris`), filtered to the boundary | population; US only |
 | `lodes_main`, `lodes_aux` | US Census LODES8 OD files | employment; US only |
 
@@ -44,7 +45,7 @@ The regional PBF is trimmed to the city boundary before parsing. When the `osmiu
 command-line tool is available it is used directly; otherwise a pure-Python `pyosmium`
 fallback produces byte-equivalent results more slowly. Clipping semantics — and how they
 differ from the brokenspoke-analyzer reference — are documented under
-[Known deviations](deviations.md#clipping-approaches).
+[Intentional deviations](../differences/deviations.md#clipping-approaches).
 
 ## Boundary manipulation
 
@@ -109,5 +110,9 @@ meaning. This is the plug point for non-US data or a prebuilt network.
 Upstream sources evolve — the Geofabrik extract, census vintages, and LODES years all
 change over time — so a re-acquire is **not** guaranteed byte-identical to a past run.
 For reproducible scoring, keep the acquired input files (they are content-addressed by
-name) rather than re-acquiring. Parity validation therefore pins a **frozen** set of
-Aspen inputs rather than a live download.
+name) rather than re-acquiring.
+
+!!! info "Relationship to brokenspoke-analyzer"
+    The SQL scripts this stage replaces — and any points where the output
+    intentionally differs — are catalogued in the
+    [Differences from brokenspoke-analyzer](../differences/index.md) section.

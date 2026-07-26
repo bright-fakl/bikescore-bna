@@ -48,3 +48,12 @@ The `destinations` stage will cluster and locate the new type, and the `scores` 
 `neighborhood` stages will fold it into the opportunity category. See
 [Destinations](../how-it-works/destinations.md) for how clustering and access counting
 work.
+
+## Related pages
+
+- **How it works:** [Destinations](../how-it-works/destinations.md) ·
+  [Scoring](../how-it-works/scoring.md) ·
+  [Neighborhood scores](../how-it-works/neighborhood-scores.md)
+- **Reference:** [Destination catalogs](../reference/destinations.md) ·
+  [Configuration](../reference/config.md) · [CLI](../reference/cli.md)
+- **Related:** [Score a city](run-a-city.md)

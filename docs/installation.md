@@ -33,7 +33,15 @@ $ sudo apt install osmium-tool
 $ brew install osmium-tool
 ```
 
-Everything works without it — the binary only affects acquisition speed, never results.
+For a single region, everything works without it — the binary only affects
+acquisition speed, never results.
+
+!!! warning "Required for multi-region acquisition"
+    Acquiring a city whose analysis extent crosses a state line — anything with
+    `extra_regions` — merges the Geofabrik extracts with `osmium merge`, which has
+    **no pyosmium fallback**. That path requires the `osmium` CLI and raises a clear
+    error if it is missing. See
+    [Data acquisition → Multi-region acquisition](how-it-works/data-acquisition.md#multi-region-acquisition).
 
 ## Verify
 
